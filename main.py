@@ -1,8 +1,9 @@
 import os
 import logging
-from dotenv import load_dotenv
 
-from telegram import ForceReply, Update
+from dotenv import load_dotenv
+from handlers.start_handler import start
+from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 
@@ -19,12 +20,6 @@ logging.basicConfig(
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
-
-
-async def start(update: Update, context: ContextTypes) -> None:
-    """Send a message when the command /start is issued."""
-    logger.info(f"User: {update.message.from_user.name} with ID {update.message.from_user.id} started bot")
-    await update.message.reply_text("Hi!")
 
 
 def main() -> None:

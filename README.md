@@ -12,3 +12,9 @@ How to run:
 python3 -m pip install -r requirements.txt
 python3 main.py
 ```
+
+Available commands:
+```
+/start - start bot
+/new_database - create new database (if you are admin)
+```

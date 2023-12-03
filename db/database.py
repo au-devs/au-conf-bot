@@ -5,7 +5,6 @@ import sqlite3
 
 
 logger = logging.getLogger(__name__)
-
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -27,3 +26,15 @@ def create_database() -> None:
     conn.commit()
     conn.close()
     logger.info(f"Database created at {db_path}")
+
+
+def get_db_users() -> list:
+    db_path = os.getenv('DB_PATH')
+    logger.info(f"Fetching users from database at {db_path}")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users")
+    users = cursor.fetchall()
+    conn.close()
+    logger.info(f"Fetched {len(users)} users from database at {db_path}")
+    return users

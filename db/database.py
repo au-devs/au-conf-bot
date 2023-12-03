@@ -38,3 +38,14 @@ def get_db_users() -> list:
     conn.close()
     logger.info(f"Fetched {len(users)} users from database at {db_path}")
     return users
+
+
+def add_user(user: str) -> None:
+    db_path = os.getenv('DB_PATH')
+    logger.info(f"Adding user {user} to database at {db_path}")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO users (username) VALUES (?)", (user,))
+    conn.commit()
+    conn.close()
+    logger.info(f"Added user {user} to database at {db_path}")

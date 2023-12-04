@@ -1,4 +1,5 @@
 # new_database.py
+import os
 import logging
 
 from telegram import Update

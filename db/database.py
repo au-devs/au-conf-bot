@@ -8,8 +8,40 @@ logger = logging.getLogger(__name__)
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
 
-def create_database() -> None:
-    db_path = os.getenv('DB_PATH')
+def get_db_tables(db_path: str) -> list:
+    logger.info(f"Fetching tables from database at {db_path}")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    tables = cursor.fetchall()
+    conn.close()
+    logger.info(f"Fetched {len(tables)} tables from database at {db_path}")
+    return tables
+
+
+def get_db_users(db_path: str) -> list:
+    logger.info(f"Fetching users from database at {db_path}")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users")
+    users = cursor.fetchall()
+    conn.close()
+    logger.info(f"Fetched {len(users)} users from database at {db_path}")
+    return users
+
+
+def get_user(db_path: str, user: str) -> list:
+    logger.info(f"Fetching user {user} from database at {db_path}")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE tg_username = ?", (user,))
+    user = cursor.fetchone()
+    conn.close()
+    logger.info(f"Fetched user {user} from database at {db_path}")
+    return user
+
+
+def create_database(db_path: str) -> None:
     logger.info(f"Check if database exists at {db_path}")
     if os.path.exists(db_path):
         logger.info(f"Database exists at {db_path}, not creating a new one")
@@ -28,24 +60,16 @@ def create_database() -> None:
     logger.info(f"Database created at {db_path}")
 
 
-def get_db_users() -> list:
-    db_path = os.getenv('DB_PATH')
-    logger.info(f"Fetching users from database at {db_path}")
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users")
-    users = cursor.fetchall()
-    conn.close()
-    logger.info(f"Fetched {len(users)} users from database at {db_path}")
-    return users
-
-
-def add_user(user: str) -> None:
-    db_path = os.getenv('DB_PATH')
+def add_user(db_path: str, user: str) -> None:
     logger.info(f"Adding user {user} to database at {db_path}")
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO users (username) VALUES (?)", (user,))
+    # Add user only if it does not exist
+    cursor.execute("SELECT * FROM users WHERE tg_username = ?", (user,))
+    if cursor.fetchone() is not None:
+        logger.info(f"User {user} already exists in database at {db_path}, not adding")
+        return
+    cursor.execute("INSERT INTO users (tg_username) VALUES (?)", (user,))
     conn.commit()
     conn.close()
     logger.info(f"Added user {user} to database at {db_path}")

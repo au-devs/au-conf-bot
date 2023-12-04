@@ -1,8 +1,7 @@
-    # database.py
+# database.py
 import os
 import logging
 import sqlite3
-
 
 logger = logging.getLogger(__name__)
 script_dir = os.path.dirname(os.path.abspath(__file__))

@@ -2,7 +2,7 @@
 from models.user import User
 
 
-def create_user(user_data: dict) -> 'User':
+def create_user(user_data: dict) -> User:
     """
     Create a new User instance from a user_data telegram dictionary.
     :param user_data:

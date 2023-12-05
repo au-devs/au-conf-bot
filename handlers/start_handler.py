@@ -2,7 +2,6 @@
 import os
 import logging
 
-from models.user import User
 from telegram import Update
 from telegram.ext import ContextTypes
 from db.database import get_user

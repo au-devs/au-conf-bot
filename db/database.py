@@ -2,6 +2,7 @@
 import os
 import logging
 import sqlite3
+import models.user as User
 
 logger = logging.getLogger(__name__)
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -59,7 +60,7 @@ def create_database(db_path: str) -> None:
     logger.info(f"Database created at {db_path}")
 
 
-def add_user(db_path: str, user: str) -> None:
+def add_user_old(db_path: str, user: str) -> None:
     logger.info(f"Adding user {user} to database at {db_path}")
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
@@ -72,3 +73,35 @@ def add_user(db_path: str, user: str) -> None:
     conn.commit()
     conn.close()
     logger.info(f"Added user {user} to database at {db_path}")
+
+
+def add_user(db_path: str, user: User) -> None:
+    """
+
+    :rtype: object
+    """
+    logger.info(f"Adding user {user} to database at {db_path}")
+    name = user.name
+    tg_username = user.tg_username
+    birthday = user.birthday
+    wishlist_url = user.wishlist_url
+    money_gifts = user.money_gifts
+    funny_gifts = user.funny_gifts
+
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+
+            cursor.execute("SELECT * FROM users WHERE tg_username = ?", (tg_username,))
+            if cursor.fetchone() is not None:
+                logger.info(f"User {tg_username} already exists in database at {db_path}, not adding")
+                return
+
+            cursor.execute("INSERT INTO users (name, tg_username, birthday, wishlist_url, money_gifts, funny_gifts) "
+                           "VALUES (?, ?, ?, ?, ?, ?)", (name, tg_username, birthday, wishlist_url, money_gifts,
+                                                                                    funny_gifts))
+
+        logger.info(f"Added user {tg_username} to database at {db_path}")
+
+    except Exception as e:
+        logger.error(f"Error adding user {tg_username} to database: {str(e)}")

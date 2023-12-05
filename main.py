@@ -7,7 +7,7 @@ from handlers.new_database import new_database
 from handlers.message_handler import process_quiz
 from handlers.get_users import get_users
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 
 load_dotenv() # Load environment variables from .env file
@@ -27,7 +27,11 @@ logger = logging.getLogger(__name__)
 
 def main() -> None:
     # Create the Application
-    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    try:
+        application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    except ValueError:
+        logger.error("TELEGRAM_BOT_TOKEN is not set")
+        exit(1)
 
     # Add command handlers
     application.add_handler(CommandHandler("start", start))

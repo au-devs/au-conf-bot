@@ -7,9 +7,8 @@
 -- Boolean: funnyGifts
 
 CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
+    tg_username VARCHAR(255) NOT NULL PRIMARY KEY,
     name VARCHAR(255) NULL,
-    tg_username VARCHAR(255) NOT NULL,
     birthday DATE NULL,
     wishlist_url VARCHAR(255) NULL,
     money_gifts BOOLEAN NULL,

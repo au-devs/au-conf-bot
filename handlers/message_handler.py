@@ -18,7 +18,7 @@ y_n_keyboard = [
 
 async def process_quiz(update: Update, context: ContextTypes) -> None:
     db_path = os.getenv('DB_PATH')
-    reply_markup = ReplyKeyboardMarkup(y_n_keyboard, one_time_keyboard=True)
+    reply_markup = ReplyKeyboardMarkup(y_n_keyboard, one_time_keyboard=True, resize_keyboard=True)
 
     username = update.message.from_user.name
     user_input = update.message.text

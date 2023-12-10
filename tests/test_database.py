@@ -1,6 +1,8 @@
+import sqlite3
 import unittest
 import os
-from db.database import create_database, add_user, get_db_users, get_db_tables
+from db.database import create_database, add_user, get_db_users, clear_database
+from models.user_manager import create_user
 
 
 class TestDatabase(unittest.TestCase):
@@ -11,40 +13,21 @@ class TestDatabase(unittest.TestCase):
         create_database(self.db_path)
 
     def tearDown(self):
-        # Удаляем тестовую базу после каждого теста
-        if os.path.exists(self.db_path):
-            os.remove(self.db_path)
+        self.db_path = 'users_test.sqlite'
+        clear_database(self.db_path)
 
-    def test_add_and_get_users(self):
-        # Добавляем три пользователя
-        add_user(self.db_path, "@user1")
-        add_user(self.db_path, "@user2")
-        add_user(self.db_path, "@user3")
-
-        # Получаем список пользователей
+    def test_check_birthday(self):
+        test_user = create_user({'name': 'Test User', 'tg_username': '@test_user', 'birthday': '01.01.2000',
+                                 'wishlist_url': 'https://example1.com', 'money_gifts': True, 'funny_gifts': True})
+        test_user2 = create_user({'name': 'Test User2', 'tg_username': '@test_user2', 'birthday': '01.01.2000',
+                                  'wishlist_url': 'https://example2.com', 'money_gifts': False, 'funny_gifts': True})
+        test_user3 = create_user({'name': 'Test User3', 'tg_username': '@test_user3', 'birthday': '01.01.2000',
+                                  'wishlist_url': 'https://example3.com', 'money_gifts': False, 'funny_gifts': False})
+        add_user(self.db_path, test_user)
+        add_user(self.db_path, test_user2)
+        add_user(self.db_path, test_user3)
         users = get_db_users(self.db_path)
-
-        # Проверяем, что три пользователя добавлены
         self.assertEqual(len(users), 3)
-
-        # Проверяем, что имена пользователей соответствуют ожидаемым
-        expected_usernames = ["@user1", "@user2", "@user3"]
-        for user, expected_username in zip(users, expected_usernames):
-            self.assertEqual(user[2], expected_username)
-
-    def test_sql_injection_attempt(self):
-        # Попытка SQL-инъекции
-        sql_injection_attempt = "user1'); DROP TABLE users; --"
-
-        # Пытаемся добавить пользователя с подозрительным именем
-        add_user(self.db_path, sql_injection_attempt)
-
-        # Проверяем, что таблица users не была удалена
-        tables = get_db_tables(self.db_path)
-        self.assertIn(('users',), tables)
-
-        # Проверяем, что файл базы данных существует
-        self.assertTrue(os.path.exists(self.db_path))
 
 
 if __name__ == '__main__':

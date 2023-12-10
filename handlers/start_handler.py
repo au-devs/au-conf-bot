@@ -5,7 +5,7 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 from db.database import get_user
-from message_handler import process_quiz
+from handlers.message_handler import process_quiz
 
 logger = logging.getLogger(__name__)
 # States

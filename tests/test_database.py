@@ -1,6 +1,6 @@
 import unittest
 from db.database import create_database, add_user, get_db_users, clear_database
-from models.user_manager import create_user, is_near_birthday
+from models.user_manager import create_user
 
 
 class TestDatabase(unittest.TestCase):

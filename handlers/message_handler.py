@@ -1,11 +1,11 @@
 # message_handler.py
 import os
 import logging
-
+import datetime
 from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes
-from db.database import add_user
-from models.user_manager import create_user
+from db.database import add_user, get_db_users
+from models.user_manager import create_user, is_near_birthday
 
 QUIZ_START, QUIZ_NAME, QUIZ_BIRTHDAY, QUIZ_WISHLIST_URL, QUIZ_MONEY_GIFTS, QUIZ_FUNNY_GIFTS, QUIZ_FINISHED = range(7)
 logger = logging.getLogger(__name__)
@@ -13,6 +13,31 @@ logger = logging.getLogger(__name__)
 y_n_keyboard = [
     [KeyboardButton('Да'), KeyboardButton('Нет')]
 ]
+
+
+async def message_handler(update: Update, context: ContextTypes) -> None:
+    if context.user_data.get('state') == 'QUIZ_START':
+        await process_quiz(update, context)
+    else:
+        last_birthday_check = context.user_data.get('last_birthday_check')
+        if last_birthday_check is None or (datetime.datetime.now() - last_birthday_check).days >= 1:
+            # Set last_birthday_check to now
+            context.user_data['last_birthday_check'] = datetime.datetime.now()
+            logger.info(f"Birthdays is not checked, checking birthdays")
+            users = get_db_users(os.getenv('DB_PATH'))
+            for user in users:
+                if is_near_birthday(user):
+                    logging.info(f"User {user.name} is near birthday")
+                    await update.message.reply_text(
+                        f"❗❗❗ ВСЕМ ВНИМАНИЕ ЭТО НЕ УЧЕБНАЯ ТРЕВОГА ❗❗❗\nСкоро день рождения у {user.tg_username}\nДата:"
+                        f" {user.birthday
+
+                        }\nЖелаемые "
+                        f"подарки:"
+                        f" {user.wishlist_url}\n"
+                        f"Возможно пора собирать секретную конфу 🤔🤔🤔")
+            logger.info(f"Checked birthdays for {len(users)} users")
+            return
 
 
 async def process_quiz(update: Update, context: ContextTypes) -> None:

@@ -4,7 +4,7 @@ import logging
 from dotenv import load_dotenv
 from handlers.start_handler import start
 from handlers.new_database import new_database
-from handlers.message_handler import process_quiz
+from handlers.message_handler import message_handler
 from handlers.get_users import get_users
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
@@ -37,7 +37,7 @@ def main() -> None:
     application.add_handler(CommandHandler("new_database", new_database))
     application.add_handler(CommandHandler("get_users", get_users))
     # Add message handlers
-    application.add_handler(MessageHandler(filters.ALL, process_quiz))
+    application.add_handler(MessageHandler(filters.ALL, message_handler))
 
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 

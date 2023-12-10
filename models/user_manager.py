@@ -38,4 +38,4 @@ def is_near_birthday(user: User) -> bool:
     birthday_month = birthday.split('.')[1]
     birthday_date = datetime.date(today.year, int(birthday_month), int(birthday_day))
 
-    return 14 >= (today - birthday_date).days >= 0
+    return 14 >= (birthday_date - today).days >= 0

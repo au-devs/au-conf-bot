@@ -32,8 +32,8 @@ def get_db_users(db_path: str) -> list:
             cursor.execute("SELECT * FROM users")
             users = cursor.fetchall()
             logger.info(f"Fetched {len(users)} users from database at {db_path}")
-            return [User.User(name=user[0], tg_username=user[1], birthday=user[2], wishlist_url=user[3],
-                              money_gifts=user[4], funny_gifts=user[5]) for user in users]
+            return [User.User(tg_username=user[0], name=user[1], birthday=user[2], wishlist_url=user[3],
+                              money_gifts=bool(user[4]), funny_gifts=bool(user[5])) for user in users]
     except Exception as e:
         logger.error(f"Error fetching users from database at {db_path}: {str(e)}")
         return []
@@ -127,3 +127,5 @@ def add_user(db_path: str, user: User) -> None:
 
     except Exception as e:
         logger.error(f"Error adding user {tg_username} to database: {str(e)}")
+
+

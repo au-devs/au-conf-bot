@@ -127,5 +127,3 @@ def add_user(db_path: str, user: User) -> None:
 
     except Exception as e:
         logger.error(f"Error adding user {tg_username} to database: {str(e)}")
-
-

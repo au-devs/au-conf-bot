@@ -9,9 +9,8 @@ from handlers.get_users import get_users
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
-
-load_dotenv() # Load environment variables from .env file
-TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN') # Get bot token from environment variable
+load_dotenv()  # Load environment variables from .env file
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')  # Get bot token from environment variable
 
 # Enable logging
 

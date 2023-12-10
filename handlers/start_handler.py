@@ -22,6 +22,6 @@ async def start(update: Update, context: ContextTypes) -> None:
         await update.message.reply_text(f"Привет, {username}!")
     else:
         await update.message.reply_text(f"Привет, {username}. Ты новенький, давай заполним твои данные")
-        # Устанавливаем состояние в первый шаг
+        # Set state to QUIZ_START
         context.user_data['state'] = 'QUIZ_START'
         await process_quiz(update, context)

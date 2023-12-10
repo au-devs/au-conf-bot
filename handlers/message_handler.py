@@ -10,7 +10,6 @@ from models.user_manager import create_user
 QUIZ_START, QUIZ_NAME, QUIZ_BIRTHDAY, QUIZ_WISHLIST_URL, QUIZ_MONEY_GIFTS, QUIZ_FUNNY_GIFTS, QUIZ_FINISHED = range(7)
 logger = logging.getLogger(__name__)
 
-
 y_n_keyboard = [
     [KeyboardButton('Да'), KeyboardButton('Нет')]
 ]

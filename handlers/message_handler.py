@@ -32,7 +32,6 @@ async def message_handler(update: Update, context: ContextTypes) -> None:
                     await update.message.reply_text(
                         f"❗❗❗ ВСЕМ ВНИМАНИЕ ЭТО НЕ УЧЕБНАЯ ТРЕВОГА ❗❗❗\nСкоро день рождения у {user.tg_username}\nДата:"
                         f" {user.birthday
-
                         }\nЖелаемые "
                         f"подарки:"
                         f" {user.wishlist_url}\n"

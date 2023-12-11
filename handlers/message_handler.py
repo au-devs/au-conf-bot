@@ -20,10 +20,10 @@ async def message_handler(update: Update, context: ContextTypes) -> None:
     if context.user_data.get('state') in QUIZ_STATES:
         await process_quiz(update, context)
     else:
-        last_birthday_check = context.user_data.get('last_birthday_check')
+        last_birthday_check = context.chat_data.get('last_birthday_check')
         if last_birthday_check is None or (datetime.datetime.now() - last_birthday_check).days >= 1:
             # Set last_birthday_check to now
-            context.user_data['last_birthday_check'] = datetime.datetime.now()
+            context.chat_data['last_birthday_check'] = datetime.datetime.now()
             logger.info(f"Birthdays is not checked, checking birthdays")
             users = get_db_users(os.getenv('DB_PATH'))
             for user in users:

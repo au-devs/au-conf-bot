@@ -30,11 +30,10 @@ async def message_handler(update: Update, context: ContextTypes) -> None:
                 if is_near_birthday(user):
                     logging.info(f"User {user.tg_username} is near birthday")
                     await update.message.reply_text(
-                        f"❗❗❗ ВСЕМ ВНИМАНИЕ ЭТО НЕ УЧЕБНАЯ ТРЕВОГА ❗❗❗\nСкоро день рождения у {user.tg_username}\nДата:"
-                        f" {user.birthday
-                        }\nЖелаемые "
-                        f"подарки:"
-                        f" {user.wishlist_url}\n"
+                        f"❗❗❗ ВСЕМ ВНИМАНИЕ ЭТО НЕ УЧЕБНАЯ ТРЕВОГА ❗❗❗\n"
+                        f"Скоро день рождения у {user.tg_username}\n"
+                        f"Дата: {user.birthday}\n"
+                        f"Желаемые подарки:{user.wishlist_url}\n"
                         f"Возможно пора собирать секретную конфу 🤔🤔🤔")
             logger.info(f"Checked birthdays for {len(users)} users")
             return

@@ -46,6 +46,9 @@ def get_user(db_path: str, user: str) -> list:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM users WHERE tg_username = ?", (user,))
             user = cursor.fetchone()
+            if user is None:
+                logger.info(f"User {user} not found in database at {db_path}")
+                return []
             logger.info(f"Fetched user {user} from database at {db_path}")
             return user
     except Exception as e:
@@ -127,3 +130,18 @@ def add_user(db_path: str, user: User) -> None:
 
     except Exception as e:
         logger.error(f"Error adding user {tg_username} to database: {str(e)}")
+
+
+def remove_user(db_path: str, user: str) -> None:
+    logger.info(f"Removing user {user} from database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+
+            cursor.execute("DELETE FROM users WHERE tg_username = ?", (user,))
+            conn.commit()
+
+        logger.info(f"Removed user {user} from database at {db_path}")
+
+    except Exception as e:
+        logger.error(f"Error removing user {user} from database at {db_path}: {str(e)}")

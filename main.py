@@ -7,6 +7,7 @@ from handlers.new_database import new_database
 from handlers.message_handler import message_handler
 from handlers.get_users import get_users
 from handlers.add_user import add_user
+from handlers.remove_user import remove_user_handler
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
@@ -38,6 +39,7 @@ def main() -> None:
     application.add_handler(CommandHandler("new_database", new_database))
     application.add_handler(CommandHandler("get_users", get_users))
     application.add_handler(CommandHandler("add_user", add_user))
+    application.add_handler(CommandHandler("remove_user", remove_user_handler))
     # Add message handlers
     application.add_handler(MessageHandler(filters.ALL, message_handler))
 

@@ -2,6 +2,8 @@
 import os
 import logging
 import sqlite3
+from typing import Any
+
 import models.user as User
 
 logger = logging.getLogger(__name__)
@@ -39,7 +41,7 @@ def get_db_users(db_path: str) -> list:
         return []
 
 
-def get_user(db_path: str, user: str) -> list:
+def get_user(db_path: str, user: str) -> tuple:
     logger.info(f"Fetching user {user} from database at {db_path}")
     try:
         with sqlite3.connect(db_path) as conn:
@@ -48,7 +50,7 @@ def get_user(db_path: str, user: str) -> list:
             user = cursor.fetchone()
             if user is None:
                 logger.info(f"User {user} not found in database at {db_path}")
-                return []
+                return tuple()
             logger.info(f"Fetched user {user} from database at {db_path}")
             return user
     except Exception as e:

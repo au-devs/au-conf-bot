@@ -49,7 +49,7 @@ def get_user(db_path: str, user: str) -> tuple:
             cursor.execute("SELECT * FROM users WHERE tg_username = ?", (user,))
             user = cursor.fetchone()
             if user is None:
-                logger.info(f"User {user} not found in database at {db_path}")
+                logger.info(f"User not found in database at {db_path}")
                 return tuple()
             logger.info(f"Fetched user {user} from database at {db_path}")
             return user

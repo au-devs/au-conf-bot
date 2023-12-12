@@ -8,17 +8,58 @@ from db.database import add_user, get_db_users
 from models.user_manager import create_user, is_near_birthday
 from handlers.user_info import user_info
 
-QUIZ_STATES = ['QUIZ_START', 'QUIZ_NAME', 'QUIZ_BIRTHDAY', 'QUIZ_WISHLIST_URL', 'QUIZ_MONEY_GIFTS',
-               'QUIZ_FUNNY_GIFTS']
 logger = logging.getLogger(__name__)
 
 y_n_keyboard = [
     [KeyboardButton('Да'), KeyboardButton('Нет')]
 ]
 
+STATE_RESPONSE_MAP = {
+    'QUIZ_START': "Давай заполним твои данные",
+    'QUIZ_NAME': "Как тебя называть?",
+    'QUIZ_BIRTHDAY': "Введи дату рождения в формате ДД.ММ.ГГГГ",
+    'QUIZ_WISHLIST_URL': "Введи что хочешь на праздники (или ссылку на wishlist)",
+    'QUIZ_MONEY_GIFTS': "Хочешь ли ты денежный подарок? (да/нет)",
+    'QUIZ_FUNNY_GIFTS': "Хочешь ли ты смешной подарок? (да/нет)",
+    'QUIZ_FINISHED': "Спасибо за ответы, информация сохранена!",
+}
+QUIZ_STATE_TO_FIELD = {
+    'QUIZ_START': 'tg_username',
+    'QUIZ_NAME': 'name',
+    'QUIZ_BIRTHDAY': 'birthday',
+    'QUIZ_WISHLIST_URL': 'wishlist_url',
+    'QUIZ_MONEY_GIFTS': 'money_gifts',
+    'QUIZ_FUNNY_GIFTS': 'funny_gifts',
+    'QUIZ_FINISHED': '',
+}
+
+
+async def update_user_data(update: Update, context: ContextTypes, next_state: str) -> None:
+    username = update.message.from_user.name
+    user_input = update.message.text
+    current_state = context.user_data.get('state')
+    reply_markup = ReplyKeyboardMarkup(y_n_keyboard, one_time_keyboard=True, resize_keyboard=True)
+    logger.info(f"User {username} input: {user_input}, current state: {current_state}")
+
+    if context.user_data.get('tg_username') is None:
+        context.user_data['tg_username'] = username
+    else:
+        if current_state == 'QUIZ_START':
+            user_input = username
+        context.user_data[QUIZ_STATE_TO_FIELD.get(current_state)] = user_input
+    context.user_data['state'] = next_state
+
+    if next_state == 'QUIZ_MONEY_GIFTS' or next_state == 'QUIZ_FUNNY_GIFTS':
+        await update.message.reply_text(STATE_RESPONSE_MAP.get(next_state), reply_markup=reply_markup)
+        return
+    await update.message.reply_text(STATE_RESPONSE_MAP.get(next_state))
+
 
 async def message_handler(update: Update, context: ContextTypes) -> None:
-    if context.user_data.get('state') in QUIZ_STATES:
+    if context.user_data.get('state') in QUIZ_STATE_TO_FIELD.keys():
+        # ignore chat if it's not same as quiz_chat_id
+        if update.message.chat.id != context.user_data.get('quiz_chat_id'):
+            return
         await process_quiz(update, context)
     else:
         last_birthday_check = context.chat_data.get('last_birthday_check')
@@ -41,57 +82,20 @@ async def message_handler(update: Update, context: ContextTypes) -> None:
 
 
 async def process_quiz(update: Update, context: ContextTypes) -> None:
-    db_path = os.getenv('DB_PATH')
-    reply_markup = ReplyKeyboardMarkup(y_n_keyboard, one_time_keyboard=True, resize_keyboard=True)
-
-    username = update.message.from_user.name
-    user_input = update.message.text
     current_state = context.user_data.get('state')
-    logger.info(f"User {username} input: {user_input}, current state: {current_state}")
-    logger.info(f"User data: {context.user_data}")
-
+    logger.info(f"Processing quiz, current state: {current_state}")
     if current_state == 'QUIZ_START':
-        await update.message.reply_text("1. Как тебя называть?")
-        if context.user_data.get('tg_username') is None:
-            context.user_data['tg_username'] = update.message.from_user.name
-        context.user_data['state'] = 'QUIZ_NAME'
-
+        await update_user_data(update, context, 'QUIZ_NAME')
     elif current_state == 'QUIZ_NAME':
-        context.user_data['name'] = user_input
-        logger.info(f"User {username} entered name")
-        context.user_data['state'] = 'QUIZ_BIRTHDAY'
-        await update.message.reply_text("2. Введи дату рождения в формате ДД.ММ.ГГГГ")
-
+        await update_user_data(update, context, 'QUIZ_BIRTHDAY')
     elif current_state == 'QUIZ_BIRTHDAY':
-        context.user_data['birthday'] = user_input
-        logger.info(f"User {username} entered birthday")
-        context.user_data['state'] = 'QUIZ_WISHLIST_URL'
-        await update.message.reply_text("3. Введи что хочешь на праздники (или ссылку на wishlist)")
-
+        await update_user_data(update, context, 'QUIZ_WISHLIST_URL')
     elif current_state == 'QUIZ_WISHLIST_URL':
-        context.user_data['wishlist_url'] = user_input
-        logger.info(f"User {username} entered wishlist url")
-        context.user_data['state'] = 'QUIZ_MONEY_GIFTS'
-        await update.message.reply_text("4. Хочешь ли ты денежный подарок? (да/нет)", reply_markup=reply_markup)
-
+        await update_user_data(update, context, 'QUIZ_MONEY_GIFTS')
     elif current_state == 'QUIZ_MONEY_GIFTS':
-        selected_option = update.message.text
-        context.user_data['money_gifts'] = False
-        if selected_option.lower() == 'да':
-            context.user_data['money_gifts'] = True
-        logger.info(f"User {username} entered money gifts")
-        context.user_data['state'] = 'QUIZ_FUNNY_GIFTS'
-        await update.message.reply_text("5. Хочешь ли ты смешной подарок? (да/нет)", reply_markup=reply_markup)
-
+        await update_user_data(update, context, 'QUIZ_FUNNY_GIFTS')
     elif current_state == 'QUIZ_FUNNY_GIFTS':
-        selected_option = update.message.text
-        context.user_data['funny_gifts'] = False
-        if selected_option.lower() == 'да':
-            context.user_data['funny_gifts'] = True
-        logger.info(f"User {username} entered funny gifts")
-        context.user_data['state'] = 'QUIZ_FINISHED'
-
-        # Add user to database
-        add_user(db_path, create_user(context.user_data))
-        await update.message.reply_text("Спасибо за ответы! Теперь ты в списке!")
-        await user_info(update, context)
+        await update_user_data(update, context, 'QUIZ_FINISHED')
+        user = create_user(context.user_data)
+        add_user(os.getenv('DB_PATH'), user)
+        logger.info(f"User {user.tg_username} added to database")

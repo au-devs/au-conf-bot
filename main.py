@@ -42,7 +42,7 @@ def main() -> None:
     application.add_handler(CommandHandler("add_user", add_user))
     application.add_handler(CommandHandler("info", user_info))
     application.add_handler(CommandHandler("remove_user", remove_user_handler))
-    #TODO: добавить хэндлер /help, который вернет список доступных команд (без команд админа) и их описание
+    # TODO: добавить хэндлер /help, который вернет список доступных команд (без команд админа) и их описание
     # Add message handlers
     application.add_handler(MessageHandler(filters.ALL, message_handler))
 

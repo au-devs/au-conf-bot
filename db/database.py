@@ -49,7 +49,7 @@ def get_user(db_path: str, user: str) -> tuple:
             cursor.execute("SELECT * FROM users WHERE tg_username = ?", (user,))
             user = cursor.fetchone()
             if user is None:
-                logger.info(f"User {user} not found in database at {db_path}")
+                logger.info(f"User not found in database at {db_path}")
                 return tuple()
             logger.info(f"Fetched user {user} from database at {db_path}")
             return user
@@ -132,6 +132,30 @@ def add_user(db_path: str, user: User) -> None:
 
     except Exception as e:
         logger.error(f"Error adding user {tg_username} to database: {str(e)}")
+
+
+def update_user(db_path: str, user: User) -> None:
+    logger.info(f"Updating user {user} in database at {db_path}")
+    name = user.name
+    tg_username = user.tg_username
+    birthday = user.birthday
+    wishlist_url = user.wishlist_url
+    money_gifts = user.money_gifts
+    funny_gifts = user.funny_gifts
+
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+
+            cursor.execute("UPDATE users SET name = ?, birthday = ?, wishlist_url = ?, money_gifts = ?, "
+                           "funny_gifts = ? WHERE tg_username = ?", (name, birthday, wishlist_url, money_gifts,
+                                                                      funny_gifts, tg_username))
+            conn.commit()
+
+        logger.info(f"Updated user {tg_username} in database at {db_path}")
+
+    except Exception as e:
+        logger.error(f"Error updating user {tg_username} in database at {db_path}: {str(e)}")
 
 
 def remove_user(db_path: str, user: str) -> None:

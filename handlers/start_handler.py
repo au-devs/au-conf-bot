@@ -26,6 +26,7 @@ async def start(update: Update, context: ContextTypes) -> None:
             # Set state to QUIZ_START
             context.user_data['state'] = 'QUIZ_START'
             context.user_data['quiz_chat_id'] = update.message.chat.id
+            context.user_data['tg_username'] = username
             await process_quiz(update, context)
         else:
             await update.message.reply_text(f"Привет, {username}. Если хочешь пройти опрос, напиши /start в личные "

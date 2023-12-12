@@ -6,6 +6,7 @@ from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes
 from db.database import add_user, get_db_users
 from models.user_manager import create_user, is_near_birthday
+from handlers.user_info import user_info
 
 QUIZ_STATES = ['QUIZ_START', 'QUIZ_NAME', 'QUIZ_BIRTHDAY', 'QUIZ_WISHLIST_URL', 'QUIZ_MONEY_GIFTS',
                'QUIZ_FUNNY_GIFTS']
@@ -93,4 +94,4 @@ async def process_quiz(update: Update, context: ContextTypes) -> None:
         # Add user to database
         add_user(db_path, create_user(context.user_data))
         await update.message.reply_text("Спасибо за ответы! Теперь ты в списке!")
-        await update.message.reply_text(f"{context.user_data}")
+        await user_info(update, context)

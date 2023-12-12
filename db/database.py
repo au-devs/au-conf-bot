@@ -134,6 +134,30 @@ def add_user(db_path: str, user: User) -> None:
         logger.error(f"Error adding user {tg_username} to database: {str(e)}")
 
 
+def update_user(db_path: str, user: User) -> None:
+    logger.info(f"Updating user {user} in database at {db_path}")
+    name = user.name
+    tg_username = user.tg_username
+    birthday = user.birthday
+    wishlist_url = user.wishlist_url
+    money_gifts = user.money_gifts
+    funny_gifts = user.funny_gifts
+
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+
+            cursor.execute("UPDATE users SET name = ?, birthday = ?, wishlist_url = ?, money_gifts = ?, "
+                           "funny_gifts = ? WHERE tg_username = ?", (name, birthday, wishlist_url, money_gifts,
+                                                                      funny_gifts, tg_username))
+            conn.commit()
+
+        logger.info(f"Updated user {tg_username} in database at {db_path}")
+
+    except Exception as e:
+        logger.error(f"Error updating user {tg_username} in database at {db_path}: {str(e)}")
+
+
 def remove_user(db_path: str, user: str) -> None:
     logger.info(f"Removing user {user} from database at {db_path}")
     try:

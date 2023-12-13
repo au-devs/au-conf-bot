@@ -32,12 +32,13 @@ logger = logging.getLogger(__name__)
 async def post_init(application: Application) -> None:
     await application.bot.set_my_commands(
         [BotCommand("start", "Начало квиза"),
-         BotCommand("new_database", "Создание новой базы данных пользователей"),
-         BotCommand("add_user", "Добавление нового пользователя"),
-         BotCommand("remove_user", "Удаление пользователя"),
          BotCommand("info", "Вывод информации о себе"),
-         BotCommand("get_users", "Список всех пользователей")]
+         BotCommand("new_database", "[ADMIN] Создание новой базы данных пользователей"),
+         BotCommand("add_user", "[ADMIN] Добавление нового пользователя"),
+         BotCommand("get_users", "[ADMIN] Список всех пользователей")],
+         BotCommand("remove_user", "[ADMIN]  Удаление пользователя"),
     )
+
 
 def main() -> None:
     # Create the Application

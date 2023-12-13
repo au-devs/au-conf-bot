@@ -8,7 +8,6 @@ from db.database import get_user
 from handlers.message_handler import process_quiz
 
 logger = logging.getLogger(__name__)
-# States
 
 
 async def start(update: Update, context: ContextTypes) -> None:
@@ -21,7 +20,14 @@ async def start(update: Update, context: ContextTypes) -> None:
         logger.info(f"User {username} exists in database")
         await update.message.reply_text(f"Привет, {username}!")
     else:
-        await update.message.reply_text(f"Привет, {username}. Ты новенький, давай заполним твои данные")
-        # Set state to QUIZ_START
-        context.user_data['state'] = 'QUIZ_START'
-        await process_quiz(update, context)
+        chat_type = update.message.chat.type
+        if chat_type == 'private':
+            await update.message.reply_text(f"Привет, {username}. Ты новенький, давай заполним твои данные")
+            # Set state to QUIZ_START
+            context.user_data['state'] = 'QUIZ_START'
+            context.user_data['quiz_chat_id'] = update.message.chat.id
+            context.user_data['tg_username'] = username
+            await process_quiz(update, context)
+        else:
+            await update.message.reply_text(f"Привет, {username}. Если хочешь пройти опрос, напиши /start в личные "
+                                            f"сообщения боту (мне)")

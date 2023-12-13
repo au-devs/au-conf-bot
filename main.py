@@ -30,7 +30,6 @@ logger = logging.getLogger(__name__)
 
 
 async def post_init(application: Application) -> None:
-    # if is_admin():
     await application.bot.set_my_commands(
         [BotCommand("start", "Начало квиза"),
          BotCommand("new_database", "Создание новой базы данных пользователей"),
@@ -39,12 +38,6 @@ async def post_init(application: Application) -> None:
          BotCommand("info", "Вывод информации о себе"),
          BotCommand("get_users", "Список всех пользователей")]
     )
-    # else:
-    #     logger.info(f"{update.message.from_user.name} is not admin")
-    #     await application.bot.set_my_commands(
-    #         [BotCommand("start", "Начало квиза"),
-    #          BotCommand("info", "Вывод информации о себе")]
-    #     )
 
 def main() -> None:
     # Create the Application

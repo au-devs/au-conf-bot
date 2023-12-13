@@ -35,8 +35,8 @@ async def post_init(application: Application) -> None:
          BotCommand("info", "Вывод информации о себе"),
          BotCommand("new_database", "[ADMIN] Создание новой базы данных пользователей"),
          BotCommand("add_user", "[ADMIN] Добавление нового пользователя"),
-         BotCommand("get_users", "[ADMIN] Список всех пользователей")],
-         BotCommand("remove_user", "[ADMIN]  Удаление пользователя"),
+         BotCommand("get_users", "[ADMIN] Список всех пользователей"),
+         BotCommand("remove_user", "[ADMIN]  Удаление пользователя")]
     )
 
 

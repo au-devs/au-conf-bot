@@ -2,6 +2,8 @@ import os
 import logging
 
 from dotenv import load_dotenv
+
+from handlers.admin_checker import is_admin
 from handlers.start_handler import start
 from handlers.new_database import new_database
 from handlers.message_handler import message_handler
@@ -9,7 +11,7 @@ from handlers.get_users import get_users
 from handlers.add_user import add_user
 from handlers.remove_user import remove_user_handler
 from handlers.user_info import user_info
-from telegram import Update
+from telegram import Update, BotCommand
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 load_dotenv()  # Load environment variables from .env file
@@ -27,10 +29,27 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
+async def post_init(application: Application) -> None:
+    # if is_admin():
+    await application.bot.set_my_commands(
+        [BotCommand("start", "Начало квиза"),
+         BotCommand("new_database", "Создание новой базы данных пользователей"),
+         BotCommand("add_user", "Добавление нового пользователя"),
+         BotCommand("remove_user", "Удаление пользователя"),
+         BotCommand("info", "Вывод информации о себе"),
+         BotCommand("get_users", "Список всех пользователей")]
+    )
+    # else:
+    #     logger.info(f"{update.message.from_user.name} is not admin")
+    #     await application.bot.set_my_commands(
+    #         [BotCommand("start", "Начало квиза"),
+    #          BotCommand("info", "Вывод информации о себе")]
+    #     )
+
 def main() -> None:
     # Create the Application
     try:
-        application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+        application = Application.builder().token(TELEGRAM_BOT_TOKEN).post_init(post_init).build()
     except ValueError:
         logger.error("TELEGRAM_BOT_TOKEN is not set")
         exit(1)
@@ -42,7 +61,6 @@ def main() -> None:
     application.add_handler(CommandHandler("add_user", add_user))
     application.add_handler(CommandHandler("info", user_info))
     application.add_handler(CommandHandler("remove_user", remove_user_handler))
-    #TODO: добавить хэндлер /help, который вернет список доступных команд (без команд админа) и их описание
     # Add message handlers
     application.add_handler(MessageHandler(filters.ALL, message_handler))
 

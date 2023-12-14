@@ -68,13 +68,12 @@ async def update_user_data(update: Update, context: ContextTypes, next_state: st
 
 
 async def message_handler(update: Update, context: ContextTypes) -> None:
-    if (context.user_data.get('state') in QUIZ_STATE_TO_FIELD.keys() and update.message.chat.id !=
+    if (context.user_data.get('state') in QUIZ_STATE_TO_FIELD.keys() and update.message.chat.id ==
             context.user_data.get('quiz_chat_id')):
         await process_quiz(update, context)
-    elif (context.user_data.get('state') == 'USER_INFO_EDIT' and update.message.chat.id !=
+    elif (context.user_data.get('state') == 'USER_INFO_EDIT' and update.message.chat.id ==
           context.user_data.get('quiz_chat_id')):
         await edit_user_data(update, context)
-    await edit_user_data(update, context)
     last_birthday_check = context.chat_data.get('last_birthday_check')
     if last_birthday_check is None or (datetime.datetime.now() - last_birthday_check).days >= 1:
         # Set last_birthday_check to now
@@ -116,8 +115,10 @@ async def process_quiz(update: Update, context: ContextTypes) -> None:
 
 async def edit_user_data(update: Update, context: ContextTypes) -> None:
     user_input = update.message.text
+
     username = update.message.from_user.name
     current_state = context.user_data.get('state')
+    y_n_markup = ReplyKeyboardMarkup(y_n_keyboard, one_time_keyboard=True, resize_keyboard=True)
     if context.user_data.get('tg_username') is None:
         context.user_data['tg_username'] = username
     field_to_edit = context.user_data.get('field_to_edit')
@@ -129,8 +130,14 @@ async def edit_user_data(update: Update, context: ContextTypes) -> None:
         field_to_edit = user_input
         logger.info(f"User {update.effective_user.name} is editing {field_to_edit}")
         context.user_data['field_to_edit'] = KEYBOARD_TO_FIELD.get(field_to_edit)
+        if context.user_data['field_to_edit'] == 'money_gifts' or context.user_data['field_to_edit'] == 'funny_gifts':
+            await update.message.reply_text(STATE_RESPONSE_MAP.get(current_state), reply_markup=y_n_markup)
         await update.message.reply_text('Введите новое значение')
     elif current_state == 'USER_INFO_EDIT' and field_to_edit is not None:
+        if user_input == 'Да':
+            user_input = True
+        elif user_input == 'Нет':
+            user_input = False
         update_user(os.getenv('DB_PATH'), username, field_to_edit, user_input)
         logger.info(f"User {update.effective_user.name} edited {field_to_edit} to {user_input}")
         context.user_data['field_to_edit'] = None

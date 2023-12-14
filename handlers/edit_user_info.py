@@ -11,7 +11,9 @@ y_n_keyboard = [
 
 
 async def edit_info(update: Update, context: ContextTypes):
-    context.user_data['state'] = 'USER_INFO_EDIT'
-    context.user_data['quiz_chat_id'] = update.message.chat.id
-    logger.info(f"Received command to edit user info from {update.effective_user.name}")
-    await edit_user_data(update, context)
+    chat_type = update.message.chat.type
+    if chat_type == 'private':
+        context.user_data['state'] = 'USER_INFO_EDIT'
+        context.user_data['quiz_chat_id'] = update.message.chat.id
+        logger.info(f"Received command to edit user info from {update.effective_user.name}")
+        await edit_user_data(update, context)

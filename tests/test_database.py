@@ -38,7 +38,7 @@ class TestDatabase(unittest.TestCase):
         self.assertIn(test_user, users)
         updated_user = create_user({'name': 'Updated User', 'tg_username': '@test_user', 'birthday': '01.01.2000',
                                     'wishlist_url': 'https://example1.com', 'money_gifts': True, 'funny_gifts': True})
-        db.update_user(self.db_path, updated_user)
+        db.update_user(self.db_path, '@test_user', 'name', 'Updated User')
         users = db.get_db_users(self.db_path)
         self.assertEqual(len(users), 1)
         self.assertIn(updated_user, users)

@@ -4,7 +4,6 @@ import os
 
 from telegram import Update
 from telegram.ext import ContextTypes
-from handlers.admin_checker import is_admin
 from db.database import get_user
 from models.user import User
 

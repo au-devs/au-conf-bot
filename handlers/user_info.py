@@ -6,15 +6,9 @@ from telegram import Update
 from telegram.ext import ContextTypes
 from db.database import get_user
 from models.user import User
+from util.util import markdown_escape
 
 logger = logging.getLogger(__name__)
-
-
-def markdown_escape(text: str) -> str:
-    escape_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
-    for char in escape_chars:
-        text = text.replace(char, f'\\{char}')
-    return text
 
 
 async def user_info(update: Update, context: ContextTypes):

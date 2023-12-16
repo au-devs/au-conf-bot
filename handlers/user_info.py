@@ -10,6 +10,13 @@ from models.user import User
 logger = logging.getLogger(__name__)
 
 
+def markdown_escape(text: str) -> str:
+    escape_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+    for char in escape_chars:
+        text = text.replace(char, f'\\{char}')
+    return text
+
+
 async def user_info(update: Update, context: ContextTypes):
     db_path = os.getenv('DB_PATH')
     tg_username = update.message.from_user.name
@@ -26,11 +33,11 @@ async def user_info(update: Update, context: ContextTypes):
         funny_gifts = 'Да'
 
     await update.message.reply_text(
-        f"*Имя:* {user.name.replace('.', '\\.')}\n"
-        f"*Юзернейм*: {user.tg_username.replace('.', '\\.')}\n"
-        f"*Дата рождения:* {user.birthday.replace('.', '\\.')}\n"
-        f"*Вишлист:* {user.wishlist_url.replace('.', '\\.')}\n"
-        f"*Подарок деньгами:* {money_gifts}\n"
-        f"*Рофляный подарок:* {funny_gifts}",
+        f"*Имя:* {markdown_escape(user.name)}\n"
+        f"*Юзернейм*: {markdown_escape(user.tg_username)}\n"
+        f"*Дата рождения:* {markdown_escape(user.birthday)}\n"
+        f"*Вишлист:* {markdown_escape(user.wishlist_url)}\n"
+        f"*Подарок деньгами:* {markdown_escape(money_gifts)}\n"
+        f"*Рофляный подарок:* {markdown_escape(funny_gifts)}",
         parse_mode='MarkdownV2'
     )

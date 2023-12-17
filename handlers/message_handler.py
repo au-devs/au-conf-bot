@@ -96,6 +96,12 @@ async def message_handler(update: Update, context: ContextTypes) -> None:
                         f"Возможно пора собирать секретную конфу 🤔🤔🤔",
                         parse_mode='MarkdownV2'
                     )
+                elif (birthday_date - datetime.date.today()).days == 0:
+                    await update.message.reply_text(
+                        f"❗❗❗ ВСЕМ ВНИМАНИЕ ЭТО АВТОМАТИЧЕСКОЕ ПОЗДРАВЛЕНИЕ ❗❗❗\n"
+                        f"С ДНЕМ РОЖДЕНИЯ 🎉🎉🎉🎉🎉🎉🎉🎉🎉\n",
+                        parse_mode='MarkdownV2'
+                    )
         return
 
 

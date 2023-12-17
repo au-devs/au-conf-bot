@@ -51,13 +51,12 @@ async def update_user_data(update: Update, context: ContextTypes, next_state: st
     user_input = update.message.text
     current_state = context.user_data.get('state')
     reply_markup = ReplyKeyboardMarkup(y_n_keyboard, one_time_keyboard=True, resize_keyboard=True)
-    logger.info(f"User {username} input: {user_input}, current state: {current_state}")
 
     if context.user_data.get('tg_username') is None:
         context.user_data['tg_username'] = username
     else:
         if current_state == 'QUIZ_START':
-            user_input = username
+            user_input = context.user_data.get('tg_username')
         context.user_data[QUIZ_STATE_TO_FIELD.get(current_state)] = user_input
     context.user_data['state'] = next_state
 

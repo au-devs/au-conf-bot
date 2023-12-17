@@ -19,6 +19,7 @@ async def add_user(update: Update, context: ContextTypes) -> None:
         await update.message.reply_text("Неверное количество аргументов")
         return
     tg_username = context.args[0]
+    context.user_data['quiz_chat_id'] = update.message.chat.id
     context.user_data['tg_username'] = tg_username
     context.user_data['state'] = 'QUIZ_START'
     await process_quiz(update, context)

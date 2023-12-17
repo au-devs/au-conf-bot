@@ -5,7 +5,8 @@ import datetime
 from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes
 from db.database import add_user, get_db_users, update_user
-from models.user_manager import create_user, is_near_birthday
+from models.user_manager import create_user, is_near_birthday, get_closest_birthday
+from util.util import markdown_escape
 
 logger = logging.getLogger(__name__)
 
@@ -82,13 +83,19 @@ async def message_handler(update: Update, context: ContextTypes) -> None:
         for user in users:
             if is_near_birthday(user):
                 logging.info(f"User {user.tg_username} is near birthday")
-                await update.message.reply_text(
-                    f"❗❗❗ ВСЕМ ВНИМАНИЕ ЭТО НЕ УЧЕБНАЯ ТРЕВОГА ❗❗❗\n"
-                    f"Скоро день рождения у {user.tg_username}\n"
-                    f"Дата: {user.birthday}\n"
-                    f"Желаемые подарки:{user.wishlist_url}\n"
-                    f"Возможно пора собирать секретную конфу 🤔🤔🤔")
-        logger.info(f"Checked birthdays for {len(users)} users")
+                # Check if user has birthday in 14, 7 or 1 day
+                birthday_date = get_closest_birthday(user)
+                if (birthday_date - datetime.date.today()).days == 14 or \
+                        (birthday_date - datetime.date.today()).days == 7 or \
+                        (birthday_date - datetime.date.today()).days == 1:
+                    await update.message.reply_text(
+                        f"❗❗❗ ВСЕМ ВНИМАНИЕ ЭТО НЕ УЧЕБНАЯ ТРЕВОГА ❗❗❗\n"
+                        f"Скоро день рождения у {markdown_escape(user.tg_username)}\n"
+                        f"*Дата:* {markdown_escape(user.birthday)}\n"
+                        f"*Желаемые подарки:*{markdown_escape(user.wishlist_url)}\n"
+                        f"Возможно пора собирать секретную конфу 🤔🤔🤔",
+                        parse_mode='MarkdownV2'
+                    )
         return
 
 
@@ -140,4 +147,5 @@ async def edit_user_data(update: Update, context: ContextTypes) -> None:
         update_user(os.getenv('DB_PATH'), username, field_to_edit, user_input)
         logger.info(f"User {update.effective_user.name} edited {field_to_edit} to {user_input}")
         context.user_data['field_to_edit'] = None
+        context.user_data['state'] = None
         await update.message.reply_text('Изменения сохранены')

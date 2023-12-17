@@ -25,12 +25,12 @@ def update_user_fields(user: User, updated_data: dict) -> None:
         setattr(user, field, value)
 
 
-def is_near_birthday(user: User) -> bool:
+def get_closest_birthday(user: User) -> datetime.date:
     """
-    Check if the user's birthday is within 14 days from now
+    Get the closest birthday of the user in the future
 
     :param user: The User instance to check
-    :return: True if the user's birthday is within 14 days from now, False otherwise
+    :return: The closest birthday of the user in the future
     """
     birthday = user.birthday
     today = datetime.date.today()
@@ -38,4 +38,19 @@ def is_near_birthday(user: User) -> bool:
     birthday_month = birthday.split('.')[1]
     birthday_date = datetime.date(today.year, int(birthday_month), int(birthday_day))
 
-    return 14 >= (birthday_date - today).days >= 0
+    if birthday_date < today:
+        birthday_date = datetime.date(today.year + 1, int(birthday_month), int(birthday_day))
+
+    return birthday_date
+
+
+def is_near_birthday(user: User) -> bool:
+    """
+    Check if the user's birthday is within 14 days from now
+
+    :param user: The User instance to check
+    :return: True if the user's birthday is within 14 days from now, False otherwise
+    """
+    today = datetime.date.today()
+
+    return 14 >= (get_closest_birthday(user) - today).days >= 0

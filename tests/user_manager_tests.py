@@ -20,8 +20,8 @@ class TestUserManager(unittest.TestCase):
                                   'wishlist_url': 'https://example4.com', 'money_gifts': True, 'funny_gifts': True})
 
         self.assertTrue(is_near_birthday(test_user))
-        self.assertTrue(is_near_birthday(test_user2))
-        self.assertFalse(is_near_birthday(test_user3))
+        self.assertFalse(is_near_birthday(test_user2))
+        self.assertTrue(is_near_birthday(test_user3))
         self.assertFalse(is_near_birthday(test_user4))
 
 

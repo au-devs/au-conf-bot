@@ -99,7 +99,7 @@ async def message_handler(update: Update, context: ContextTypes) -> None:
                 elif (birthday_date - datetime.date.today()).days == 0:
                     await update.message.reply_text(
                         f"❗❗❗ ВСЕМ ВНИМАНИЕ ЭТО АВТОМАТИЧЕСКОЕ ПОЗДРАВЛЕНИЕ ❗❗❗\n"
-                        f"С ДНЕМ РОЖДЕНИЯ 🎉🎉🎉🎉🎉🎉🎉🎉🎉\n",
+                        f"🎉 🎉 🎉  С ДНЕМ РОЖДЕНИЯ {markdown_escape(user.tg_username)}  🎉 🎉 🎉\n",
                         parse_mode='MarkdownV2'
                     )
         return

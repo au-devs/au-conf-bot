@@ -36,9 +36,12 @@ async def ask_ollama(update: Update, context: ContextTypes) -> None:
     }
 
     # Send the request to the API
-    response = requests.post(ollama_url, data=json.dumps(payload))
-    logger.info(f"Response from Ollama: {response.text}")
+    try:
+        response = requests.post(ollama_url, data=json.dumps(payload))
+        logger.info(f"Response from Ollama: {response.text}")
 
-    # # Parse the response and send it to the user
-    response_data = response.json()
-    await update.message.reply_text(response_data['response'])
+        # Parse the response and send it to the user
+        response_data = response.json()
+        await update.message.reply_text(response_data['response'])
+    except requests.exceptions.RequestException:
+        await update.message.reply_text("Sorry, the model is currently unavailable. Please try again later.")

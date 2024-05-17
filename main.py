@@ -2,6 +2,7 @@ import os
 import logging
 
 from dotenv import load_dotenv
+
 from handlers.start_handler import start
 from handlers.new_database import new_database
 from handlers.message_handler import message_handler
@@ -10,6 +11,7 @@ from handlers.add_user import add_user
 from handlers.remove_user import remove_user_handler
 from handlers.user_info import user_info
 from handlers.edit_user_info import edit_info
+from handlers.ask_ollama import ask_ollama
 from telegram import Update, BotCommand
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
@@ -56,6 +58,7 @@ def main() -> None:
     application.add_handler(CommandHandler("info", user_info))
     application.add_handler(CommandHandler("remove_user", remove_user_handler))
     application.add_handler(CommandHandler("edit_info", edit_info))
+    application.add_handler(CommandHandler("ask", ask_ollama))
     # Add message handlers
     application.add_handler(MessageHandler(filters.ALL, message_handler))
 

@@ -59,6 +59,7 @@ def main() -> None:
     application.add_handler(CommandHandler("remove_user", remove_user_handler))
     application.add_handler(CommandHandler("edit_info", edit_info))
     application.add_handler(CommandHandler("ask", ask_ollama))
+    application.add_handler(CommandHandler("ask_chat", ask_ollama))
     # Add message handlers
     application.add_handler(MessageHandler(filters.ALL, message_handler))
 

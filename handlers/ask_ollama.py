@@ -6,6 +6,7 @@ import logging
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import ContextTypes
+from util.util import markdown_escape
 
 load_dotenv()  # Load environment variables from .env file
 logger = logging.getLogger(__name__)
@@ -13,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 async def ask_ollama(update: Update, context: ContextTypes) -> None:
     """Send a message when the command /ask is issued."""
+    ollama_model = os.getenv('OLLAMA_MODEL', 'llama3')
     ollama_host = os.getenv('OLLAMA_HOST')
     ollama_port = os.getenv('OLLAMA_PORT')
     ollama_url = f"http://{ollama_host}:{ollama_port}/api/generate"
@@ -30,7 +32,7 @@ async def ask_ollama(update: Update, context: ContextTypes) -> None:
 
     # Prepare the request payload
     payload = {
-        "model": "llama3",
+        "model": ollama_model,
         "prompt": question,
         "stream": False
     }
@@ -42,6 +44,6 @@ async def ask_ollama(update: Update, context: ContextTypes) -> None:
 
         # Parse the response and send it to the user
         response_data = response.json()
-        await update.message.reply_text(response_data['response'])
+        await update.message.reply_text(markdown_escape(response_data['response']), parse_mode='MarkdownV2')
     except requests.exceptions.RequestException:
         await update.message.reply_text("Sorry, the model is currently unavailable. Please try again later.")

@@ -6,6 +6,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 from handlers.admin_checker import is_admin
 from db.database import get_db_users
+from util.util import format_users_list
 
 logger = logging.getLogger(__name__)
 
@@ -19,4 +20,5 @@ async def get_users(update: Update, context: ContextTypes):
         return
     users = get_db_users(db_path)
     logger.info(f"Got {len(users)} users from database")
-    await update.message.reply_text(f"Users: {users}")
+    formatted_users = format_users_list(users)
+    await update.message.reply_text(formatted_users, parse_mode='MarkdownV2')

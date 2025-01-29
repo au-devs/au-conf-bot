@@ -4,7 +4,7 @@ import logging
 import datetime
 from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes
-from db.database import add_user, get_db_users, update_user
+from db.database import add_user, get_db_users, update_user, update_reminder, get_reminder_status, reset_birthday_today_reminders
 from models.user_manager import create_user, is_near_birthday, get_closest_birthday
 from util.util import markdown_escape
 
@@ -74,35 +74,36 @@ async def message_handler(update: Update, context: ContextTypes) -> None:
     elif (context.user_data.get('state') == 'USER_INFO_EDIT' and update.message.chat.id ==
           context.user_data.get('quiz_chat_id')):
         await edit_user_data(update, context)
+    
     last_birthday_check = context.chat_data.get('last_birthday_check')
     if last_birthday_check is None or (datetime.datetime.now() - last_birthday_check).days >= 1:
         # Set last_birthday_check to now
         context.chat_data['last_birthday_check'] = datetime.datetime.now()
-        logger.info(f"Birthdays is not checked, checking birthdays")
+        logger.info(f"Birthdays are not checked, checking birthdays")
         users = get_db_users(os.getenv('DB_PATH'))
         for user in users:
-            if is_near_birthday(user):
-                logging.info(f"User {user.tg_username} is near birthday")
-                # Check if user has birthday in 14, 7 or 1 day
-                birthday_date = get_closest_birthday(user)
-                if (birthday_date - datetime.date.today()).days == 14 or \
-                        (birthday_date - datetime.date.today()).days == 7 or \
-                        (birthday_date - datetime.date.today()).days == 1:
+            birthday_date = get_closest_birthday(user)
+            days_until_birthday = (birthday_date - datetime.date.today()).days
+            if days_until_birthday in [14, 7, 1]:
+                reminder_type = f"reminder_{days_until_birthday}_days"
+                if not get_reminder_status(os.getenv('DB_PATH'), user.tg_username, reminder_type):
                     await update.message.reply_text(
                         f"❗❗❗ ВСЕМ ВНИМАНИЕ ЭТО НЕ УЧЕБНАЯ ТРЕВОГА ❗❗❗\n"
                         f"Скоро день рождения у {markdown_escape(user.tg_username)}\n"
                         f"*Дата:* {markdown_escape(user.birthday)}\n"
-                        f"*Желаемые подарки:*{markdown_escape(user.wishlist_url)}\n"
-                        f"Возможно пора собирать секретную конфу 🤔🤔🤔",
+                        f"*Желаемые подарки:* {markdown_escape(user.wishlist_url)}\n",
                         parse_mode='MarkdownV2'
                     )
-                elif (birthday_date - datetime.date.today()).days == 0:
+                    update_reminder(os.getenv('DB_PATH'), user.tg_username, reminder_type)
+            elif days_until_birthday == 0:
+                if not get_reminder_status(os.getenv('DB_PATH'), user.tg_username, 'birthday_today'):
                     await update.message.reply_text(
                         f"❗❗❗ ВСЕМ ВНИМАНИЕ ЭТО АВТОМАТИЧЕСКОЕ ПОЗДРАВЛЕНИЕ ❗❗❗\n"
                         f"🎉 🎉 🎉  С ДНЕМ РОЖДЕНИЯ {markdown_escape(user.tg_username)}  🎉 🎉 🎉\n",
                         parse_mode='MarkdownV2'
                     )
-        return
+                    update_reminder(os.getenv('DB_PATH'), user.tg_username, 'birthday_today')
+            reset_birthday_today_reminders(os.getenv('DB_PATH'))
 
 
 async def process_quiz(update: Update, context: ContextTypes) -> None:

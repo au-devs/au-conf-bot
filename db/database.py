@@ -1,4 +1,3 @@
-# database.py
 import os
 import logging
 import sqlite3
@@ -128,6 +127,8 @@ def add_user(db_path: str, user: User) -> None:
             cursor.execute("INSERT INTO users (name, tg_username, birthday, wishlist_url, money_gifts, funny_gifts) "
                            "VALUES (?, ?, ?, ?, ?, ?)", (name, tg_username, birthday, wishlist_url, money_gifts,
                                                          funny_gifts))
+            cursor.execute("INSERT INTO reminders (tg_username, reminder_14_days, reminder_7_days, reminder_1_days) "
+                           "VALUES (?, 0, 0, 0)", (tg_username,))
         logger.info(f"Added user {tg_username} to database at {db_path}")
 
     except Exception as e:
@@ -161,9 +162,58 @@ def remove_user(db_path: str, user: str) -> None:
             cursor = conn.cursor()
 
             cursor.execute("DELETE FROM users WHERE tg_username = ?", (user,))
+            cursor.execute("DELETE FROM reminders WHERE tg_username = ?", (user,))
             conn.commit()
 
         logger.info(f"Removed user {user} from database at {db_path}")
 
     except Exception as e:
         logger.error(f"Error removing user {user} from database at {db_path}: {str(e)}")
+
+
+def update_reminder(db_path: str, tg_username: str, reminder_type: str) -> None:
+    logger.info(f"Updating reminder {reminder_type} for user {tg_username} in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"UPDATE reminders SET {reminder_type} = 1 WHERE tg_username = ?", (tg_username,))
+            conn.commit()
+        logger.info(f"Updated reminder {reminder_type} for user {tg_username} in database at {db_path}")
+    except Exception as e:
+        logger.error(f"Error updating reminder {reminder_type} for user {tg_username} in database at {db_path}: {str(e)}")
+
+
+def get_reminder_status(db_path: str, tg_username: str, reminder_type: str) -> bool:
+    logger.info(f"Fetching reminder status {reminder_type} for user {tg_username} from database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"SELECT {reminder_type} FROM reminders WHERE tg_username = ?", (tg_username,))
+            result = cursor.fetchone()
+            return result[0] == 1 if result else False
+    except Exception as e:
+        logger.error(f"Error fetching reminder status {reminder_type} for user {tg_username} from database at {db_path}: {str(e)}")
+        return False
+
+
+def reset_reminders(db_path: str) -> None:
+    logger.info(f"Resetting all reminders in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE reminders SET reminder_14_days = 0, reminder_7_days = 0, reminder_1_days = 0, birthday_today = 0")
+            conn.commit()
+        logger.info(f"All reminders reset in database at {db_path}")
+    except Exception as e:
+        logger.error(f"Error resetting reminders in database at {db_path}: {str(e)}")
+
+def reset_birthday_today_reminders(db_path: str) -> None:
+    logger.info(f"Resetting birthday_today reminders in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE reminders SET birthday_today = 0")
+            conn.commit()
+        logger.info(f"birthday_today reminders reset in database at {db_path}")
+    except Exception as e:
+        logger.error(f"Error resetting birthday_today reminders in database at {db_path}: {str(e)}")

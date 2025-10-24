@@ -2,7 +2,7 @@
 import os
 import logging
 import datetime
-from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
+from telegram import Update, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import ContextTypes
 from db.database import add_user, get_db_users, update_user, update_reminder, get_reminder_status, reset_birthday_today_reminders
 from models.user_manager import create_user, is_near_birthday, get_closest_birthday
@@ -63,6 +63,10 @@ async def update_user_data(update: Update, context: ContextTypes, next_state: st
 
     if next_state == 'QUIZ_MONEY_GIFTS' or next_state == 'QUIZ_FUNNY_GIFTS':
         await update.message.reply_text(STATE_RESPONSE_MAP.get(next_state), reply_markup=reply_markup)
+        return
+
+    elif next_state == 'QUIZ_FINISHED':
+        await update.message.reply_text(STATE_RESPONSE_MAP.get(next_state), reply_markup=ReplyKeyboardRemove())
         return
     await update.message.reply_text(STATE_RESPONSE_MAP.get(next_state))
 
@@ -155,4 +159,4 @@ async def edit_user_data(update: Update, context: ContextTypes) -> None:
         logger.info(f"User {update.effective_user.name} edited {field_to_edit} to {user_input}")
         context.user_data['field_to_edit'] = None
         context.user_data['state'] = None
-        await update.message.reply_text('Изменения сохранены')
+        await update.message.reply_text('Изменения сохранены', reply_markup=ReplyKeyboardRemove())

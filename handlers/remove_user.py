@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 async def remove_user_handler(update: Update, context: ContextTypes) -> None:
-    """Send a message when the command /remove_user <tg_username> is issued."""
+    """Send a message when the command /remove_user <user_id> is issued."""
     db_path = os.getenv('DB_PATH')
     username = update.message.from_user.name
     if not is_admin(update.message.from_user.name):
@@ -20,8 +20,8 @@ async def remove_user_handler(update: Update, context: ContextTypes) -> None:
     if len(context.args) != 1:
         await update.message.reply_text("Неверное количество аргументов")
         return
-    tg_username = context.args[0]
-    logger.info(f"Removing user {tg_username}")
-    remove_user(db_path, tg_username)
-    if len(get_user(db_path, tg_username)) == 0:
-        await update.message.reply_text(f"Пользователь {tg_username} удален из списка 🥲")
+    target_user_id = context.args[0]
+    logger.info(f"Removing user {target_user_id}")
+    remove_user(db_path, target_user_id)
+    if len(get_user(db_path, target_user_id)) == 0:
+        await update.message.reply_text(f"Пользователь с id {target_user_id} удален из списка 🥲")

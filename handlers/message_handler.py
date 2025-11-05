@@ -30,7 +30,7 @@ STATE_RESPONSE_MAP = {
     'USER_INFO_EDIT': "Что хочешь изменить?",
 }
 QUIZ_STATE_TO_FIELD = {
-    'QUIZ_START': 'tg_username',
+    'QUIZ_START': 'user_id',
     'QUIZ_NAME': 'name',
     'QUIZ_BIRTHDAY': 'birthday',
     'QUIZ_WISHLIST_URL': 'wishlist_url',
@@ -48,16 +48,16 @@ KEYBOARD_TO_FIELD = {
 
 
 async def update_user_data(update: Update, context: ContextTypes, next_state: str) -> None:
-    username = update.message.from_user.name
+    user_id = update.message.from_user.id
     user_input = update.message.text
     current_state = context.user_data.get('state')
     reply_markup = ReplyKeyboardMarkup(y_n_keyboard, one_time_keyboard=True, resize_keyboard=True)
 
-    if context.user_data.get('tg_username') is None:
-        context.user_data['tg_username'] = username
+    if context.user_data.get('user_id') is None:
+        context.user_data['user_id'] = user_id
     else:
         if current_state == 'QUIZ_START':
-            user_input = context.user_data.get('tg_username')
+            user_input = context.user_data.get('user_id')
         context.user_data[QUIZ_STATE_TO_FIELD.get(current_state)] = user_input
     context.user_data['state'] = next_state
 
@@ -90,7 +90,7 @@ async def message_handler(update: Update, context: ContextTypes) -> None:
             days_until_birthday = (birthday_date - datetime.date.today()).days
             if days_until_birthday in [14, 7, 1]:
                 reminder_type = f"reminder_{days_until_birthday}_days"
-                if not get_reminder_status(os.getenv('DB_PATH'), user.tg_username, reminder_type):
+                if not get_reminder_status(os.getenv('DB_PATH'), user.user_id, user.tg_username, reminder_type):
                     await update.message.reply_text(
                         f"❗❗❗ ВСЕМ ВНИМАНИЕ ЭТО НЕ УЧЕБНАЯ ТРЕВОГА ❗❗❗\n"
                         f"Скоро день рождения у {markdown_escape(user.tg_username)}\n"
@@ -98,15 +98,15 @@ async def message_handler(update: Update, context: ContextTypes) -> None:
                         f"*Желаемые подарки:* {markdown_escape(user.wishlist_url)}\n",
                         parse_mode='MarkdownV2'
                     )
-                    update_reminder(os.getenv('DB_PATH'), user.tg_username, reminder_type)
+                    update_reminder(os.getenv('DB_PATH'), user.user_id, user.tg_username, reminder_type)
             elif days_until_birthday == 0:
-                if not get_reminder_status(os.getenv('DB_PATH'), user.tg_username, 'birthday_today'):
+                if not get_reminder_status(os.getenv('DB_PATH'), user.user_id, user.tg_username, 'birthday_today'):
                     await update.message.reply_text(
                         f"❗❗❗ ВСЕМ ВНИМАНИЕ ЭТО АВТОМАТИЧЕСКОЕ ПОЗДРАВЛЕНИЕ ❗❗❗\n"
                         f"🎉 🎉 🎉  С ДНЕМ РОЖДЕНИЯ {markdown_escape(user.tg_username)}  🎉 🎉 🎉\n",
                         parse_mode='MarkdownV2'
                     )
-                    update_reminder(os.getenv('DB_PATH'), user.tg_username, 'birthday_today')
+                    update_reminder(os.getenv('DB_PATH'), user.user_id, user.tg_username, 'birthday_today')
             reset_birthday_today_reminders(os.getenv('DB_PATH'))
 
 
@@ -127,17 +127,16 @@ async def process_quiz(update: Update, context: ContextTypes) -> None:
         await update_user_data(update, context, 'QUIZ_FINISHED')
         user = create_user(context.user_data)
         add_user(os.getenv('DB_PATH'), user)
-        logger.info(f"User {user.tg_username} added to database")
+        logger.info(f"User {user.tg_username} with id {user.user_id} added to database")
 
 
 async def edit_user_data(update: Update, context: ContextTypes) -> None:
     user_input = update.message.text
-
-    username = update.message.from_user.name
+    user_id = update.message.from_user.id
     current_state = context.user_data.get('state')
     y_n_markup = ReplyKeyboardMarkup(y_n_keyboard, one_time_keyboard=True, resize_keyboard=True)
-    if context.user_data.get('tg_username') is None:
-        context.user_data['tg_username'] = username
+    if context.user_data.get('user_id') is None:
+        context.user_data['user_id'] = user_id
     field_to_edit = context.user_data.get('field_to_edit')
     if user_input == '/edit_info':
         reply_markup = ReplyKeyboardMarkup(info_keyboard, one_time_keyboard=True, resize_keyboard=True)
@@ -155,7 +154,7 @@ async def edit_user_data(update: Update, context: ContextTypes) -> None:
             user_input = True
         elif user_input == 'Нет':
             user_input = False
-        update_user(os.getenv('DB_PATH'), username, field_to_edit, user_input)
+        update_user(os.getenv('DB_PATH'),user_id, field_to_edit, user_input)
         logger.info(f"User {update.effective_user.name} edited {field_to_edit} to {user_input}")
         context.user_data['field_to_edit'] = None
         context.user_data['state'] = None

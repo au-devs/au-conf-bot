@@ -5,6 +5,7 @@ from typing import Any
 
 import models.user as User
 
+
 logger = logging.getLogger(__name__)
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -33,19 +34,19 @@ def get_db_users(db_path: str) -> list:
             cursor.execute("SELECT * FROM users")
             users = cursor.fetchall()
             logger.info(f"Fetched {len(users)} users from database at {db_path}")
-            return [User.User(tg_username=user[0], name=user[1], birthday=user[2], wishlist_url=user[3],
-                              money_gifts=bool(user[4]), funny_gifts=bool(user[5])) for user in users]
+            return [User.User(user_id=user[0], tg_username=user[1], name=user[2], birthday=user[3], wishlist_url=user[4],
+                              money_gifts=bool(user[5]), funny_gifts=bool(user[6])) for user in users]
     except Exception as e:
         logger.error(f"Error fetching users from database at {db_path}: {str(e)}")
         return []
 
 
-def get_user(db_path: str, user: str) -> tuple:
+def get_user(db_path: str, user: int) -> tuple | None | Any:
     logger.info(f"Fetching user {user} from database at {db_path}")
     try:
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM users WHERE tg_username = ?", (user,))
+            cursor.execute("SELECT * FROM users WHERE user_id = ?", (user,))
             user = cursor.fetchone()
             if user is None:
                 logger.info(f"User not found in database at {db_path}")
@@ -109,6 +110,7 @@ def add_user(db_path: str, user: User) -> None:
     """
     logger.info(f"Adding user {user} to database at {db_path}")
     name = user.name
+    user_id = user.user_id
     tg_username = user.tg_username
     birthday = user.birthday
     wishlist_url = user.wishlist_url
@@ -119,24 +121,24 @@ def add_user(db_path: str, user: User) -> None:
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
 
-            cursor.execute("SELECT * FROM users WHERE tg_username = ?", (tg_username,))
+            cursor.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
             if cursor.fetchone() is not None:
-                logger.info(f"User {tg_username} already exists in database at {db_path}, not adding")
+                logger.info(f"User {tg_username} with id {user_id} already exists in database at {db_path}, not adding")
                 return
 
-            cursor.execute("INSERT INTO users (name, tg_username, birthday, wishlist_url, money_gifts, funny_gifts) "
-                           "VALUES (?, ?, ?, ?, ?, ?)", (name, tg_username, birthday, wishlist_url, money_gifts,
+            cursor.execute("INSERT INTO users (user_id, name, tg_username, birthday, wishlist_url, money_gifts, funny_gifts) "
+                           "VALUES (?, ?, ?, ?, ?, ?, ?)", (user_id, name, tg_username, birthday, wishlist_url, money_gifts,
                                                          funny_gifts))
-            cursor.execute("INSERT INTO reminders (tg_username, reminder_14_days, reminder_7_days, reminder_1_days) "
-                           "VALUES (?, 0, 0, 0)", (tg_username,))
-        logger.info(f"Added user {tg_username} to database at {db_path}")
+            cursor.execute("INSERT INTO reminders (user_id, reminder_14_days, reminder_7_days, reminder_1_days) "
+                           "VALUES (?, 0, 0, 0)", (user_id,))
+        logger.info(f"Added user {tg_username} with id {user_id} to database at {db_path}")
 
     except Exception as e:
-        logger.error(f"Error adding user {tg_username} to database: {str(e)}")
+        logger.error(f"Error adding user {tg_username} with id {user_id} to database: {str(e)}")
 
 
-def update_user(db_path: str, tg_username: str, field_to_update: str, updated_data: str) -> None:
-    user = get_user(db_path, tg_username)
+def update_user(db_path: str, user_id: int, field_to_update: str, updated_data: str) -> None:
+    user = get_user(db_path, user_id)
     logger.info(f"Updating user {user} in database at {db_path}")
     if user is None:
         logger.info(f"User {user} not found in database at {db_path}")
@@ -145,8 +147,8 @@ def update_user(db_path: str, tg_username: str, field_to_update: str, updated_da
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
 
-            cursor.execute(f"UPDATE users SET {field_to_update} = ? WHERE tg_username = ?",
-                           (updated_data, tg_username))
+            cursor.execute(f"UPDATE users SET {field_to_update} = ? WHERE user_id = ?",
+                           (updated_data, user_id))
             conn.commit()
 
         logger.info(f"Updated user {user} in database at {db_path}")
@@ -155,44 +157,44 @@ def update_user(db_path: str, tg_username: str, field_to_update: str, updated_da
         logger.error(f"Error updating user {user} in database at {db_path}: {str(e)}")
 
 
-def remove_user(db_path: str, user: str) -> None:
-    logger.info(f"Removing user {user} from database at {db_path}")
+def remove_user(db_path: str, user: int) -> None:
+    logger.info(f"Removing user with id {user} from database at {db_path}")
     try:
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
 
-            cursor.execute("DELETE FROM users WHERE tg_username = ?", (user,))
-            cursor.execute("DELETE FROM reminders WHERE tg_username = ?", (user,))
+            cursor.execute("DELETE FROM users WHERE user_id = ?", (user,))
+            cursor.execute("DELETE FROM reminders WHERE user_id = ?", (user,))
             conn.commit()
 
-        logger.info(f"Removed user {user} from database at {db_path}")
+        logger.info(f"Removed user with id {user} from database at {db_path}")
 
     except Exception as e:
-        logger.error(f"Error removing user {user} from database at {db_path}: {str(e)}")
+        logger.error(f"Error removing user with id {user} from database at {db_path}: {str(e)}")
 
 
-def update_reminder(db_path: str, tg_username: str, reminder_type: str) -> None:
+def update_reminder(db_path: str, user_id: int, tg_username: str, reminder_type: str) -> None:
     logger.info(f"Updating reminder {reminder_type} for user {tg_username} in database at {db_path}")
     try:
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute(f"UPDATE reminders SET {reminder_type} = 1 WHERE tg_username = ?", (tg_username,))
+            cursor.execute(f"UPDATE reminders SET {reminder_type} = 1 WHERE user_id = ?", (user_id,))
             conn.commit()
-        logger.info(f"Updated reminder {reminder_type} for user {tg_username} in database at {db_path}")
+        logger.info(f"Updated reminder {reminder_type} for user {tg_username} with tg_id {user_id} in database at {db_path}")
     except Exception as e:
-        logger.error(f"Error updating reminder {reminder_type} for user {tg_username} in database at {db_path}: {str(e)}")
+        logger.error(f"Error updating reminder {reminder_type} for user {tg_username} with tg_id {user_id} in database at {db_path}: {str(e)}")
 
 
-def get_reminder_status(db_path: str, tg_username: str, reminder_type: str) -> bool:
-    logger.info(f"Fetching reminder status {reminder_type} for user {tg_username} from database at {db_path}")
+def get_reminder_status(db_path: str, user_id: int, tg_username: str, reminder_type: str) -> bool:
+    logger.info(f"Fetching reminder status {reminder_type} for user {tg_username} with tg_id {user_id} from database at {db_path}")
     try:
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute(f"SELECT {reminder_type} FROM reminders WHERE tg_username = ?", (tg_username,))
+            cursor.execute(f"SELECT {reminder_type} FROM reminders WHERE user_id = ?", (user_id,))
             result = cursor.fetchone()
             return result[0] == 1 if result else False
     except Exception as e:
-        logger.error(f"Error fetching reminder status {reminder_type} for user {tg_username} from database at {db_path}: {str(e)}")
+        logger.error(f"Error fetching reminder status {reminder_type} for user {tg_username} with tg_id {user_id} from database at {db_path}: {str(e)}")
         return False
 
 

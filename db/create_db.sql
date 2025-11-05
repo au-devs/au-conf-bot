@@ -7,7 +7,8 @@
 -- Boolean: funnyGifts
 
 CREATE TABLE IF NOT EXISTS users (
-    tg_username VARCHAR(255) NOT NULL PRIMARY KEY,
+    user_id INTEGER NOT NULL PRIMARY KEY,
+    tg_username VARCHAR(255) NULL,
     name VARCHAR(255) NULL,
     birthday DATE NULL,
     wishlist_url VARCHAR(255) NULL,
@@ -16,10 +17,10 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE TABLE IF NOT EXISTS reminders (
-    tg_username VARCHAR(255) NOT NULL PRIMARY KEY,
+    user_id INTEGER NOT NULL PRIMARY KEY,
     reminder_14_days BOOLEAN NOT NULL DEFAULT 0,
     reminder_7_days BOOLEAN NOT NULL DEFAULT 0,
     reminder_1_days BOOLEAN NOT NULL DEFAULT 0,
     birthday_today BOOLEAN NOT NULL DEFAULT 0,
-    FOREIGN KEY (tg_username) REFERENCES users (tg_username)
+    FOREIGN KEY (user_id) REFERENCES users (user_id)
 );

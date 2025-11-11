@@ -3,7 +3,7 @@ from typing import Optional
 
 
 class User:
-    def __init__(self, user_id: int, name: str, tg_username: str,  birthday: Optional[str], wishlist_url: Optional[str],
+    def __init__(self, user_id: int, name: str, tg_username: str, birthday: Optional[str], wishlist_url: Optional[str],
                  money_gifts: Optional[bool], funny_gifts: Optional[bool]):
         self.user_id = user_id
         self.name = name

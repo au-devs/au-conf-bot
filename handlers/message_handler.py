@@ -154,8 +154,13 @@ async def edit_user_data(update: Update, context: ContextTypes) -> None:
             user_input = True
         elif user_input == 'Нет':
             user_input = False
-        update_user(os.getenv('DB_PATH'),user_id, field_to_edit, user_input)
+        update_user(os.getenv('DB_PATH'), user_id, field_to_edit, user_input)
         logger.info(f"User {update.effective_user.name} edited {field_to_edit} to {user_input}")
         context.user_data['field_to_edit'] = None
         context.user_data['state'] = None
         await update.message.reply_text('Изменения сохранены', reply_markup=ReplyKeyboardRemove())
+
+# async def test(update: Update, context: ContextTypes):
+#     user_input = update.message.text
+#     await update.message.reply_text()
+

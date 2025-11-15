@@ -9,7 +9,7 @@ def create_user(user_data: dict) -> User:
     :param user_data:
     :return:
     """
-    return User(name=user_data['name'], tg_username=user_data['tg_username'],
+    return User(user_id=user_data['user_id'], name=user_data['name'], tg_username=user_data['tg_username'],
                 birthday=user_data['birthday'], wishlist_url=user_data['wishlist_url'],
                 money_gifts=bool(user_data['money_gifts']), funny_gifts=bool(user_data['funny_gifts']))
 

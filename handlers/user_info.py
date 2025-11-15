@@ -14,13 +14,14 @@ logger = logging.getLogger(__name__)
 
 async def user_info(update: Update, context: ContextTypes):
     db_path = os.getenv('DB_PATH')
-    tg_username = update.message.from_user.name
-    if len(context.args) != 0 and is_admin(tg_username):
+    tg_username = update.message.from_user.username
+    user_id = update.message.from_user.id
+    if len(context.args) != 0 and is_admin(user_id):
         tg_username = context.args[0]
-    logger.info(f"Received command to get users from {update.effective_user.name}")
-    user_db = get_user(db_path, tg_username)
-    user = User(tg_username=user_db[0], name=user_db[1], birthday=user_db[2], wishlist_url=user_db[3],
-                money_gifts=bool(user_db[4]), funny_gifts=bool(user_db[5]))
+    logger.info(f"Received command to get user info from {update.effective_user.name}")
+    user_db = get_user(db_path, user_id)
+    user = User(user_id=user_db[0], name=user_db[1], tg_username=user_db[2], birthday=user_db[3], wishlist_url=user_db[4],
+                money_gifts=bool(user_db[5]), funny_gifts=bool(user_db[6]))
     logger.info(f"Got {user} from database")
     money_gifts = 'Нет'
     funny_gifts = 'Нет'
@@ -30,6 +31,7 @@ async def user_info(update: Update, context: ContextTypes):
         funny_gifts = 'Да'
 
     await update.message.reply_text(
+        f"*Telegram ID:* {markdown_escape(str(user.user_id))}\n"
         f"*Имя:* {markdown_escape(user.name)}\n"
         f"*Юзернейм*: {markdown_escape(user.tg_username)}\n"
         f"*Дата рождения:* {markdown_escape(user.birthday)}\n"

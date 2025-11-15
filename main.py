@@ -10,7 +10,7 @@ from handlers.add_user import add_user
 from handlers.remove_user import remove_user_handler
 from handlers.user_info import user_info
 from handlers.edit_user_info import edit_info
-from telegram import Update, BotCommand
+from telegram import Update, BotCommand, Bot
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 load_dotenv()  # Load environment variables from .env file

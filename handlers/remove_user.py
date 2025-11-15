@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 async def remove_user_handler(update: Update, context: ContextTypes) -> None:
     """Send a message when the command /remove_user <user_id> or /remove_user <tg_username> is issued."""
     db_path = os.getenv('DB_PATH')
-    if not is_admin(update.message.from_user.name):
+    if not is_admin(update.message.from_user.id):
         logger.info(f"{update.message.from_user.name} is not admin, not getting users")
         return
     logger.info(f"Received command to remove_user from {update.message.from_user.name}")

@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 async def add_user(update: Update, context: ContextTypes) -> None:
     """Send a message when the command /add_user <tg_username> <user_id> is issued."""
     username = update.message.from_user.name
-    if not is_admin(update.message.from_user.name):
+    if not is_admin(update.message.from_user.id):
         logger.info(f"{update.message.from_user.name} is not admin, not getting users")
         return
     logger.info(f"Received command to add user from {username}")

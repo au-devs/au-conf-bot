@@ -15,7 +15,7 @@ async def get_users(update: Update, context: ContextTypes):
     db_path = os.getenv('DB_PATH')
     """ Get all users from the database. """
     logger.info(f"Received command to get users from {update.effective_user.name}")
-    if not is_admin(update.message.from_user.name):
+    if not is_admin(update.message.from_user.id):
         logger.info(f"{update.message.from_user.name} is not admin, not getting users")
         return
     users = get_db_users(db_path)

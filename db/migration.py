@@ -62,14 +62,14 @@ def all_users_have_ids() -> bool | None:
         logger.info(f"Something went wrong: {str(e)}")
 
 def notify_admins(text: str) -> None | Exception:
-    admins_ids = map(lambda x: int(x), os.getenv("ADMINS_IDS").split(","))
+    admins_ids = [int(x) for x in os.getenv('ADMINS_IDS').split(',')]
     async def send_msg():
-        for admin in admins_ids:
+        for admin_id in admins_ids:
             try:
-                await bot.send_message(chat_id=admin, text=text)
-                logger.info(f"Message is sent to admin with id {admin}")
+                await bot.send_message(chat_id=admin_id, text=text)
+                logger.info(f"Message is sent to admin with id {admin_id}")
             except Exception as e:
-                logger.info(f"Failed to send message to admin with id {admin}: {str(e)}")
+                logger.info(f"Failed to send message to admin with id {admin_id}: {str(e)}")
     asyncio.run(send_msg())
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 -- Script for create empty users database
+-- Integer: tg_id
 -- String: Name
 -- String: tg_username
 -- Date: birthday
@@ -8,8 +9,8 @@
 
 CREATE TABLE IF NOT EXISTS users (
     user_id INTEGER NOT NULL PRIMARY KEY,
-    tg_username VARCHAR(255) NULL,
     name VARCHAR(255) NULL,
+    tg_username VARCHAR(255) NULL,
     birthday DATE NULL,
     wishlist_url VARCHAR(255) NULL,
     money_gifts BOOLEAN NULL,
@@ -22,5 +23,5 @@ CREATE TABLE IF NOT EXISTS reminders (
     reminder_7_days BOOLEAN NOT NULL DEFAULT 0,
     reminder_1_days BOOLEAN NOT NULL DEFAULT 0,
     birthday_today BOOLEAN NOT NULL DEFAULT 0,
-    FOREIGN KEY (user_id) REFERENCES users (user_id)
+    FOREIGN KEY (user_id) REFERENCES users (user_id) ON UPDATE CASCADE
 );

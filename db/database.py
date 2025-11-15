@@ -34,19 +34,19 @@ def get_db_users(db_path: str) -> list:
             cursor.execute("SELECT * FROM users")
             users = cursor.fetchall()
             logger.info(f"Fetched {len(users)} users from database at {db_path}")
-            return [User.User(user_id=user[0], tg_username=user[1], name=user[2], birthday=user[3], wishlist_url=user[4],
+            return [User.User(user_id=user[0], name=user[1], tg_username=user[2], birthday=user[3], wishlist_url=user[4],
                               money_gifts=bool(user[5]), funny_gifts=bool(user[6])) for user in users]
     except Exception as e:
         logger.error(f"Error fetching users from database at {db_path}: {str(e)}")
         return []
 
 
-def get_user(db_path: str, user: int) -> tuple | None | Any:
-    logger.info(f"Fetching user with id {user} from database at {db_path}")
+def get_user(db_path: str, user_id: int) -> tuple | None | Any:
+    logger.info(f"Fetching user with id {user_id} from database at {db_path}")
     try:
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM users WHERE user_id = ?", (user,))
+            cursor.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
             user = cursor.fetchone()
             if user is None:
                 logger.info(f"User not found in database at {db_path}")
@@ -54,8 +54,22 @@ def get_user(db_path: str, user: int) -> tuple | None | Any:
             logger.info(f"Fetched user {user} from database at {db_path}")
             return user
     except Exception as e:
-        logger.error(f"Error fetching user {user} from database at {db_path}: {str(e)}")
+        logger.error(f"Error fetching user {user_id} from database at {db_path}: {str(e)}")
 
+def get_user_by_username(db_path: str, username: str) -> tuple | None | Any:
+    logger.info(f"Fetching user {username} from database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM users WHERE tg_username = ?", (username,))
+            user = cursor.fetchone()
+            if user is None:
+                logger.info(f"User not found in database at {db_path}")
+                return tuple()
+            logger.info(f"Fetched user {user} from database at {db_path}")
+            return user
+    except Exception as e:
+        logger.error(f"Error fetching user {username} from database at {db_path}: {str(e)}")
 
 def create_database(db_path: str) -> None:
     logger.info(f"Check if database exists at {db_path}")
@@ -136,21 +150,45 @@ def add_user(db_path: str, user: User) -> None:
     except Exception as e:
         logger.error(f"Error adding user {tg_username} with id {user_id} to database: {str(e)}")
 
+def update_user_id(db_path: str, username: str, user_id: int) -> None:
+    logger.info(f"Updating user's {username} user_id in database at {db_path}")
+    user = get_user_by_username(db_path, username)
+    if user is None:
+        logger.info(f"User with username {username} is not found in database at {db_path}")
+        return
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE users SET user_id = ? WHERE tg_username = ?", (user_id, username))
+            cursor.execute("UPDATE reminders SET user_id = ? WHERE tg_username = ?", (user_id, username))
+            conn.commit()
+
+    except Exception as e:
+        logger.info(f"Error updating user's {username} user_id: {str(e)}")
+
+def update_username(db_path: str, username: str, user_id: int) -> None:
+    logger.info(f"Updating user's username with id {user_id} in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE users SET tg_username = ? WHERE user_id = ?", (username, user_id))
+            conn.commit()
+
+    except Exception as e:
+        logger.info(f"Error updating user's username with id {user_id}: {str(e)}")
 
 def update_user(db_path: str, user_id: int, field_to_update: str, updated_data: str) -> None:
     user = get_user(db_path, user_id)
     logger.info(f"Updating user {user} in database at {db_path}")
     if user is None:
-        logger.info(f"User {user} not found in database at {db_path}")
+        logger.info(f"User with id {user_id} not found in database at {db_path}")
         return
     try:
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
-
             cursor.execute(f"UPDATE users SET {field_to_update} = ? WHERE user_id = ?",
                            (updated_data, user_id))
             conn.commit()
-
         logger.info(f"Updated user {user} in database at {db_path}")
 
     except Exception as e:

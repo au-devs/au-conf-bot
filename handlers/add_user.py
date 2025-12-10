@@ -1,6 +1,5 @@
 # add_user.py
 import logging
-import os
 
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -24,8 +23,8 @@ async def add_user(update: Update, context: ContextTypes) -> None:
                                         "Например, /add_user @User 12345")
         return
     tg_username = context.args[0]
-    user_id = context.args[1]
-    if not user_id.isdigit():
+    user_id_str = context.args[1]
+    if not user_id_str.isdigit():
         await update.message.reply_text("Неверный формат ввода. user_id должен быть числом. \n"
                                         "Формат: /add_user tg_username user_id.\n"
                                         "Например, /add_user @User 12345")
@@ -33,5 +32,5 @@ async def add_user(update: Update, context: ContextTypes) -> None:
     context.user_data['quiz_chat_id'] = update.message.chat.id
     context.user_data['tg_username'] = tg_username
     context.user_data['state'] = 'QUIZ_START'
-    context.user_data['user_id'] = user_id
+    context.user_data['user_id'] = int(user_id_str)
     await process_quiz(update, context)

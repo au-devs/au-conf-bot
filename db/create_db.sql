@@ -1,5 +1,5 @@
 -- Script for create empty users database
--- Integer: tg_id
+-- Integer: user_id
 -- String: Name
 -- String: tg_username
 -- Date: birthday

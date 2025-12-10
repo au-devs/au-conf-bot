@@ -3,19 +3,20 @@ import os
 import logging
 import datetime
 
+import telegram.error
 from dotenv import load_dotenv
 from telegram import Update, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import ContextTypes
 from db.database import add_user, get_db_users, update_user, update_reminder, get_reminder_status, \
-    reset_birthday_today_reminders, get_id_by_username, update_user_id, update_username
-from db.migration import all_users_have_ids
+    reset_birthday_today_reminders, update_user_id, update_username
+from db.migration import all_users_have_ids, bot
 from models.user_manager import create_user, get_closest_birthday
 from util.util import markdown_escape
 
 
 load_dotenv()
 
-COLLECT_IDS = os.getenv('COLLECT_IDS')
+COLLECT_IDS = os.getenv("COLLECT_IDS")
 logger = logging.getLogger(__name__)
 
 y_n_keyboard = [
@@ -91,11 +92,7 @@ async def message_handler(update: Update, context: ContextTypes) -> None:
         context.chat_data['last_birthday_check'] = datetime.datetime.now()
         logger.info(f"Birthdays are not checked, checking birthdays")
         users = get_db_users(os.getenv('DB_PATH'))
-        actual_username = update.message.from_user.name
         for user in users:
-            db_username = user.tg_username
-            if actual_username != db_username:
-                update_username(os.getenv('DB_PATH'), actual_username, user.user_id)
             birthday_date = get_closest_birthday(user)
             days_until_birthday = (birthday_date - datetime.date.today()).days
             if days_until_birthday in [14, 7, 1]:
@@ -169,20 +166,27 @@ async def edit_user_data(update: Update, context: ContextTypes) -> None:
         await update.message.reply_text('Изменения сохранены', reply_markup=ReplyKeyboardRemove())
 
 async def id_updater(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not COLLECT_IDS:
+    if COLLECT_IDS == "false" or update.effective_user.id == context.bot.id:
         return
-    if update.effective_user.id == context.bot.id:
-        return
-    logger.info(f"COLLECT_ID mode is set. Collecting telegram IDs from users...")
-    user_id = update.effective_user.id
+    logger.info("COLLECT_ID mode is set. Collecting telegram IDs from users...")
+    db_path = os.getenv("DB_PATH")
+    if "all_users" not in context.application.bot_data:
+        users = {u.tg_username: u.user_id for u in get_db_users(db_path)}
+        context.application.bot_data["all_users"] = users
+    else:
+        users = context.application.bot_data["all_users"]
+    new_user_id = update.effective_user.id
     username = update.effective_user.name
-    db_path = os.getenv('DB_PATH')
+    old_user_id = users.get(username)
     try:
-        if get_id_by_username(db_path, username) == user_id:
-            return
-        else:
-            update_user_id(db_path, username, user_id)
-            logger.info(f"User's {username} tg id {user_id} has been updated successfully in database at {db_path}")
+        if username in users.keys() and new_user_id != old_user_id:
+            updated = update_user_id(db_path, username, new_user_id, old_user_id)
+            if updated:
+                users[username] = new_user_id
+                logger.info(f"User's {username} telegram ID {new_user_id} has been updated successfully in database at {db_path}")
+            else:
+                logger.warning("Failed to update")
+
     except Exception as e:
         logger.info(f"Something went wrong: {str(e)}")
 
@@ -190,3 +194,28 @@ async def id_updater(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         with open(".env", "a", encoding="utf-8") as f:
             f.write("\nCOLLECT_IDS=false\n")
         logger.info("All users have their actual telegram IDs. COLLECT_ID mode disabled.")
+
+async def username_updater(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if COLLECT_IDS == "true":
+        return
+    logger.info(f"COLLECT_IDS is: {COLLECT_IDS!r}")
+    last_username_check = context.chat_data.get('last_username_check')
+    if last_username_check is None or (datetime.datetime.now() - last_username_check).days >= 1:
+        logger.info("Usernames have not been checked, checking...")
+        # Set last_username_check to now
+        context.chat_data['last_username_check'] = datetime.datetime.now()
+        users = get_db_users(os.getenv('DB_PATH'))
+        chat_id = update.message.chat.id
+        for user in users:
+            # Getting actual usernames of all members and compare 1 by 1 within DB usernames corresponding with user_id
+            try:
+                chat_member = await bot.get_chat_member(chat_id=chat_id, user_id=user.user_id)
+
+            except telegram.error.BadRequest:
+                logger.warning(f"Member doesn't exist in this group. Skipping...")
+                continue
+
+            if user.tg_username != chat_member.user.name:
+                update_username(os.getenv('DB_PATH'), chat_member.user.name, user.user_id)
+
+print(COLLECT_IDS, COLLECT_IDS == "true", type(COLLECT_IDS))

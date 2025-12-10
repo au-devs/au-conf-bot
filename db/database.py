@@ -150,21 +150,18 @@ def add_user(db_path: str, user: User) -> None:
     except Exception as e:
         logger.error(f"Error adding user {tg_username} with id {user_id} to database: {str(e)}")
 
-def update_user_id(db_path: str, username: str, user_id: int) -> None:
+def update_user_id(db_path: str, username: str, user_id: int, old_user_id: int) -> bool:
     logger.info(f"Updating user's {username} user_id in database at {db_path}")
-    user = get_user_by_username(db_path, username)
-    if user is None:
-        logger.info(f"User with username {username} is not found in database at {db_path}")
-        return
     try:
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("UPDATE users SET user_id = ? WHERE tg_username = ?", (user_id, username))
-            cursor.execute("UPDATE reminders SET user_id = ? WHERE tg_username = ?", (user_id, username))
+            cursor.execute("UPDATE reminders SET user_id = ? WHERE user_id = ?", (user_id, old_user_id))
             conn.commit()
-
+        return True
     except Exception as e:
-        logger.info(f"Error updating user's {username} user_id: {str(e)}")
+        logger.info(f"Error updating user's {username} user_id in database at {db_path}: {str(e)}")
+        return False
 
 def update_username(db_path: str, username: str, user_id: int) -> None:
     logger.info(f"Updating user's username with id {user_id} in database at {db_path}")

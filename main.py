@@ -4,18 +4,17 @@ import logging
 from dotenv import load_dotenv
 from handlers.start_handler import start
 from handlers.new_database import new_database
-from handlers.message_handler import message_handler
+from handlers.message_handler import message_handler, id_updater, username_updater
 from handlers.get_users import get_users
 from handlers.add_user import add_user
 from handlers.remove_user import remove_user_handler
 from handlers.user_info import user_info
 from handlers.edit_user_info import edit_info
-from telegram import Update, BotCommand, Bot
+from telegram import Update, BotCommand
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 load_dotenv()  # Load environment variables from .env file
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')  # Get bot token from environment variable
-
 # Enable logging
 
 logging.basicConfig(
@@ -57,7 +56,9 @@ def main() -> None:
     application.add_handler(CommandHandler("remove_user", remove_user_handler))
     application.add_handler(CommandHandler("edit_info", edit_info))
     # Add message handlers
+    application.add_handler(MessageHandler(filters.ALL, username_updater))
     application.add_handler(MessageHandler(filters.ALL, message_handler))
+    application.add_handler(MessageHandler(filters.ALL & filters.ChatType.GROUP, id_updater), group=99)
 
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 

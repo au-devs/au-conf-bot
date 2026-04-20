@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime
 import db.database as db
 from models.user_manager import create_user
 
@@ -14,11 +15,11 @@ class TestDatabase(unittest.TestCase):
         db.clear_database(self.db_path)
 
     def test_add_user(self):
-        test_user = create_user({'name': 'Test User', 'tg_username': '@test_user', 'birthday': '01.01.2000',
+        test_user = create_user({'user_id': 1, 'name': 'Test User', 'tg_username': '@test_user', 'birthday': '01.01.2000',
                                  'wishlist_url': 'https://example1.com', 'money_gifts': True, 'funny_gifts': True})
-        test_user2 = create_user({'name': 'Test User2', 'tg_username': '@test_user2', 'birthday': '01.01.2000',
+        test_user2 = create_user({'user_id': 2, 'name': 'Test User2', 'tg_username': '@test_user2', 'birthday': '01.01.2000',
                                   'wishlist_url': 'https://example2.com', 'money_gifts': False, 'funny_gifts': True})
-        test_user3 = create_user({'name': 'Test User3', 'tg_username': '@test_user3', 'birthday': '01.01.2000',
+        test_user3 = create_user({'user_id': 3, 'name': 'Test User3', 'tg_username': '@test_user3', 'birthday': '01.01.2000',
                                   'wishlist_url': 'https://example3.com', 'money_gifts': False, 'funny_gifts': False})
         db.add_user(self.db_path, test_user)
         db.add_user(self.db_path, test_user2)
@@ -30,19 +31,37 @@ class TestDatabase(unittest.TestCase):
         self.assertIn(test_user3, users)
 
     def test_update_user(self):
-        test_user = create_user({'name': 'Test User', 'tg_username': '@test_user', 'birthday': '01.01.2000',
+        test_user = create_user({'user_id': 1, 'name': 'Test User', 'tg_username': '@test_user', 'birthday': '01.01.2000',
                                  'wishlist_url': 'https://example1.com', 'money_gifts': True, 'funny_gifts': True})
         db.add_user(self.db_path, test_user)
         users = db.get_db_users(self.db_path)
         self.assertEqual(len(users), 1)
         self.assertIn(test_user, users)
-        updated_user = create_user({'name': 'Updated User', 'tg_username': '@test_user', 'birthday': '01.01.2000',
+        updated_user = create_user({'user_id': 1, 'name': 'Updated User', 'tg_username': '@test_user', 'birthday': '01.01.2000',
                                     'wishlist_url': 'https://example1.com', 'money_gifts': True, 'funny_gifts': True})
-        db.update_user(self.db_path, '@test_user', 'name', 'Updated User')
+        db.update_user(self.db_path, 1, 'name', 'Updated User')
         users = db.get_db_users(self.db_path)
         self.assertEqual(len(users), 1)
         self.assertIn(updated_user, users)
         self.assertNotIn(test_user, users)
+
+    def test_civil_war_cooldown_persistence(self):
+        last_used_at = datetime(2026, 4, 21, 12, 0, 0)
+        db.upsert_civil_war_last_used_at(self.db_path, 12345, last_used_at)
+
+        saved_last_used_at = db.get_civil_war_last_used_at(self.db_path, 12345)
+
+        self.assertEqual(saved_last_used_at, last_used_at)
+
+    def test_civil_war_stats_persistence(self):
+        db.update_civil_war_stats(self.db_path, 12345, False)
+        db.update_civil_war_stats(self.db_path, 12345, True)
+        db.update_civil_war_stats(self.db_path, 12345, False)
+
+        attempts, successes = db.get_civil_war_stats(self.db_path, 12345)
+
+        self.assertEqual(attempts, 3)
+        self.assertEqual(successes, 1)
 
 
 if __name__ == '__main__':

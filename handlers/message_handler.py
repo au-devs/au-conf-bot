@@ -8,8 +8,7 @@ from dotenv import load_dotenv
 from telegram import Update, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import ContextTypes
 from db.database import add_user, get_db_users, update_user, update_reminder, get_reminder_status, \
-    reset_birthday_today_reminders, update_user_id, update_username
-from db.migration import all_users_have_ids
+    reset_birthday_today_reminders, update_username
 from models.user_manager import create_user, get_closest_birthday
 from util.util import markdown_escape
 
@@ -166,49 +165,7 @@ async def edit_user_data(update: Update, context: ContextTypes) -> None:
         context.user_data['state'] = None
         await update.message.reply_text('Изменения сохранены', reply_markup=ReplyKeyboardRemove())
 
-async def id_updater(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if os.getenv("COLLECT_IDS") != "true":
-        return
-    user = update.effective_user
-    if user is None or user.id == context.bot.id:
-        return
-    logger.info("COLLECT_IDS mode is set. Collecting telegram IDs from users...")
-    db_path = os.getenv("DB_PATH")
-    if "all_users" not in context.application.bot_data:
-        users = {u.tg_username: u.user_id for u in get_db_users(db_path)}
-        context.application.bot_data["all_users"] = users
-    else:
-        users = context.application.bot_data["all_users"]
-
-    new_user_id = user.id
-    username = user.name
-    old_user_id = users.get(username)
-    try:
-        if username in users and new_user_id != old_user_id:
-            updated = update_user_id(db_path, username, new_user_id, old_user_id)
-            if updated:
-                users[username] = new_user_id
-                logger.info(
-                    f"User {username} telegram ID has been updated "
-                    f"{old_user_id} -> {new_user_id} in database at {db_path}"
-                )
-            else:
-                logger.warning(f"Failed to update user_id for {username}")
-
-    except Exception as e:
-        logger.error(f"Error updating user_id for {username}: {str(e)}")
-
-    if all_users_have_ids():
-        with open(".env", "a", encoding="utf-8") as f:
-            f.write("\nCOLLECT_IDS=false\n")
-        os.environ["COLLECT_IDS"] = "false"
-        logger.info("All users have their actual telegram IDs. COLLECT_IDS mode disabled.")
-
 async def username_updater(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # Skip while we are still backfilling IDs: usernames for rows that still hold a
-    # placeholder (negative) user_id would collide with get_chat_member calls.
-    if os.getenv("COLLECT_IDS") == "true":
-        return
     chat = update.effective_chat
     if chat is None:
         return
@@ -221,8 +178,7 @@ async def username_updater(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     db_path = os.getenv('DB_PATH')
     users = get_db_users(db_path)
     for user in users:
-        # Skip rows that still have placeholder IDs - get_chat_member will fail for them.
-        if user.user_id is None or user.user_id <= 0:
+        if user.user_id is None:
             continue
         try:
             chat_member = await context.bot.get_chat_member(chat_id=chat.id, user_id=user.user_id)

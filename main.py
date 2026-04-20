@@ -4,7 +4,7 @@ import logging
 from dotenv import load_dotenv
 from handlers.start_handler import start
 from handlers.new_database import new_database
-from handlers.message_handler import message_handler, id_updater, username_updater
+from handlers.message_handler import message_handler, username_updater
 from handlers.get_users import get_users
 from handlers.add_user import add_user
 from handlers.remove_user import remove_user_handler
@@ -64,11 +64,6 @@ def main() -> None:
         group=1,
     )
     application.add_handler(MessageHandler(non_command_filter, message_handler), group=2)
-    application.add_handler(
-        MessageHandler(filters.ChatType.GROUP & ~filters.COMMAND, id_updater),
-        group=99,
-    )
-
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 

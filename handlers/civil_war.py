@@ -27,7 +27,7 @@ def get_assets_dir() -> Path:
 
 
 def get_success_image_path() -> Path:
-    return get_assets_dir() / "civilvar.jpg"
+    return get_assets_dir() / "civilwar.jpg"
 
 
 def get_fail_image_path() -> Path:

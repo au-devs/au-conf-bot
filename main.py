@@ -55,10 +55,19 @@ def main() -> None:
     application.add_handler(CommandHandler("info", user_info))
     application.add_handler(CommandHandler("remove_user", remove_user_handler))
     application.add_handler(CommandHandler("edit_info", edit_info))
-    # Add message handlers
-    application.add_handler(MessageHandler(filters.ALL, username_updater))
-    application.add_handler(MessageHandler(filters.ALL, message_handler))
-    application.add_handler(MessageHandler(filters.ALL & filters.ChatType.GROUP, id_updater), group=99)
+    # Add message handlers. We explicitly exclude command updates from the generic
+    # message_handler, otherwise the command message itself (e.g. "/start") would be
+    # consumed by the quiz state machine and stored as an answer to the next question.
+    non_command_filter = filters.ALL & ~filters.COMMAND
+    application.add_handler(
+        MessageHandler(filters.ChatType.GROUP & ~filters.COMMAND, username_updater),
+        group=1,
+    )
+    application.add_handler(MessageHandler(non_command_filter, message_handler), group=2)
+    application.add_handler(
+        MessageHandler(filters.ChatType.GROUP & ~filters.COMMAND, id_updater),
+        group=99,
+    )
 
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 

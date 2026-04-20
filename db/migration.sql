@@ -24,14 +24,18 @@ CREATE TABLE reminders (
     FOREIGN KEY (user_id) REFERENCES users (user_id) ON UPDATE CASCADE
 );
 
-INSERT INTO users (name, tg_username, birthday, wishlist_url, money_gifts, funny_gifts)
-SELECT name, tg_username, birthday, wishlist_url, money_gifts, funny_gifts
-FROM users_old
-ORDER BY tg_username;
+-- Assign negative placeholder user_ids so they are easy to distinguish from real Telegram IDs
+-- and to avoid collisions with real IDs regardless of the total number of migrated users.
+INSERT INTO users (user_id, name, tg_username, birthday, wishlist_url, money_gifts, funny_gifts)
+SELECT -ROW_NUMBER() OVER (ORDER BY tg_username),
+       name, tg_username, birthday, wishlist_url, money_gifts, funny_gifts
+FROM users_old;
 
-INSERT INTO reminders (reminder_14_days, reminder_7_days, reminder_1_days, birthday_today)
-SELECT reminder_14_days, reminder_7_days, reminder_1_days, birthday_today
-FROM reminders_old;
+-- Preserve reminder-to-user linkage by joining on the old tg_username.
+INSERT INTO reminders (user_id, reminder_14_days, reminder_7_days, reminder_1_days, birthday_today)
+SELECT u.user_id, r.reminder_14_days, r.reminder_7_days, r.reminder_1_days, r.birthday_today
+FROM reminders_old r
+JOIN users u ON u.tg_username = r.tg_username;
 
 DROP TABLE users_old;
 DROP TABLE reminders_old;

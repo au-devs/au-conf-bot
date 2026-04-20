@@ -206,35 +206,38 @@ def remove_user(db_path: str, user: int) -> None:
     except Exception as e:
         logger.error(f"Error removing user with id {user} from database at {db_path}: {str(e)}")
 
-def get_id_by_username(db_path: str, username: str) -> tuple | None | Any:
+def get_id_by_username(db_path: str, username: str) -> int | None:
     logger.info(f"Fetching user with {username} in database at {db_path}")
     try:
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT user_id FROM users WHERE tg_username = ?", (username,))
-            user_id = cursor.fetchone()
-            if user_id is None:
+            row = cursor.fetchone()
+            if row is None:
                 logger.info(f"User with username {username} is not found in database at {db_path}")
-                return tuple()
-            logger.info(f"Fetched user {username} with id {user_id[0]}")
-            return user_id[0]
+                return None
+            logger.info(f"Fetched user {username} with id {row[0]}")
+            return row[0]
     except Exception as e:
-        logger.info(f"Error fetching user with username {username} in database at {db_path}: {str(e)}")
+        logger.error(f"Error fetching user with username {username} in database at {db_path}: {str(e)}")
+        return None
 
-def get_username_by_id(db_path: str, user_id: int) -> tuple | None | Any:
+
+def get_username_by_id(db_path: str, user_id: int) -> str | None:
     logger.info(f"Fetching user with id {user_id} in database at {db_path}")
     try:
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT tg_username FROM users WHERE user_id = ?", (user_id,))
-            username = cursor.fetchone()
-            if username is None:
+            row = cursor.fetchone()
+            if row is None:
                 logger.info(f"User with id {user_id} is not found in database at {db_path}")
-                return tuple()
-            logger.info(f"Fetched user {username} with id {user_id} in database at {db_path}")
-            return username[0]
+                return None
+            logger.info(f"Fetched user {row[0]} with id {user_id} in database at {db_path}")
+            return row[0]
     except Exception as e:
-        logger.info(f"Error fetching user with id {user_id} in database at {db_path}: {str(e)}")
+        logger.error(f"Error fetching user with id {user_id} in database at {db_path}: {str(e)}")
+        return None
 
 def update_reminder(db_path: str, user_id: int, tg_username: str, reminder_type: str) -> None:
     logger.info(f"Updating reminder {reminder_type} for user {tg_username} in database at {db_path}")

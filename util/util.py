@@ -1,6 +1,8 @@
 # util.py
 
 def markdown_escape(text: str) -> str:
+    if text is None:
+        return ''
     escape_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
     for char in escape_chars:
         text = text.replace(char, f'\\{char}')

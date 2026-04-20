@@ -4,7 +4,7 @@ import logging
 from dotenv import load_dotenv
 from handlers.start_handler import start
 from handlers.new_database import new_database
-from handlers.message_handler import message_handler
+from handlers.message_handler import message_handler, id_updater, username_updater
 from handlers.get_users import get_users
 from handlers.add_user import add_user
 from handlers.remove_user import remove_user_handler
@@ -15,7 +15,6 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 load_dotenv()  # Load environment variables from .env file
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')  # Get bot token from environment variable
-
 # Enable logging
 
 logging.basicConfig(
@@ -56,8 +55,19 @@ def main() -> None:
     application.add_handler(CommandHandler("info", user_info))
     application.add_handler(CommandHandler("remove_user", remove_user_handler))
     application.add_handler(CommandHandler("edit_info", edit_info))
-    # Add message handlers
-    application.add_handler(MessageHandler(filters.ALL, message_handler))
+    # Add message handlers. We explicitly exclude command updates from the generic
+    # message_handler, otherwise the command message itself (e.g. "/start") would be
+    # consumed by the quiz state machine and stored as an answer to the next question.
+    non_command_filter = filters.ALL & ~filters.COMMAND
+    application.add_handler(
+        MessageHandler(filters.ChatType.GROUP & ~filters.COMMAND, username_updater),
+        group=1,
+    )
+    application.add_handler(MessageHandler(non_command_filter, message_handler), group=2)
+    application.add_handler(
+        MessageHandler(filters.ChatType.GROUP & ~filters.COMMAND, id_updater),
+        group=99,
+    )
 
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 

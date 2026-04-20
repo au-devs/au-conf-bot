@@ -1,6 +1,8 @@
 # util.py
 
 def markdown_escape(text: str) -> str:
+    if text is None:
+        return ''
     escape_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
     for char in escape_chars:
         text = text.replace(char, f'\\{char}')
@@ -8,7 +10,7 @@ def markdown_escape(text: str) -> str:
 
 
 def format_users_list(users: list) -> str:
-    """Format users list into readable markdown text"""
+    """Format users list into readable Markdown text"""
     if not users:
         return "Список пользователей пуст"
         
@@ -17,6 +19,7 @@ def format_users_list(users: list) -> str:
         money_gifts = 'Да' if user.money_gifts else 'Нет'
         funny_gifts = 'Да' if user.funny_gifts else 'Нет'
         result += (
+            f"*Telegram ID:* {markdown_escape(str(user.user_id))}\n"
             f"*Имя:* {markdown_escape(user.name)}\n"
             f"*Юзернейм:* {markdown_escape(user.tg_username)}\n"
             f"*Дата рождения:* {markdown_escape(user.birthday)}\n"

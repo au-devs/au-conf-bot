@@ -53,6 +53,16 @@ class TestDatabase(unittest.TestCase):
 
         self.assertEqual(saved_last_used_at, last_used_at)
 
+    def test_civil_war_stats_persistence(self):
+        db.update_civil_war_stats(self.db_path, 12345, False)
+        db.update_civil_war_stats(self.db_path, 12345, True)
+        db.update_civil_war_stats(self.db_path, 12345, False)
+
+        attempts, successes = db.get_civil_war_stats(self.db_path, 12345)
+
+        self.assertEqual(attempts, 3)
+        self.assertEqual(successes, 1)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -7,7 +7,8 @@ from pathlib import Path
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from db.database import get_civil_war_last_used_at, upsert_civil_war_last_used_at
+from db.database import get_civil_war_last_used_at, upsert_civil_war_last_used_at, update_civil_war_stats, \
+    get_civil_war_stats
 from handlers.admin_checker import is_admin
 
 
@@ -17,6 +18,7 @@ COOLDOWN = datetime.timedelta(hours=1)
 SUCCESS_CHANCE = 0.0666
 COMMAND_TEXT = "гражданская война"
 ADMIN_FORCE_COMMAND_TEXT = "/civil-war"
+STATS_COMMAND_TEXT = "/how-much-civil-war"
 DEFAULT_ASSETS_DIR = Path("/data/assets")
 
 
@@ -25,7 +27,7 @@ def get_assets_dir() -> Path:
 
 
 def get_success_image_path() -> Path:
-    return get_assets_dir() / "civilwar.jpg"
+    return get_assets_dir() / "civilvar.jpg"
 
 
 def get_fail_image_path() -> Path:
@@ -43,6 +45,18 @@ def is_civil_war_trigger(text: str | None) -> bool:
     if normalized_text.startswith("/civil_war"):
         command_part = normalized_text.split()[0]
         return command_part in {"/civil_war", "/civil_war@au_conf_bot"}
+    return False
+
+
+def is_civil_war_stats_trigger(text: str | None) -> bool:
+    if text is None:
+        return False
+    normalized_text = " ".join(text.strip().lower().split())
+    if normalized_text in {STATS_COMMAND_TEXT, f"{STATS_COMMAND_TEXT}@au_conf_bot"}:
+        return True
+    if normalized_text.startswith("/how_much_civil_war"):
+        command_part = normalized_text.split()[0]
+        return command_part in {"/how_much_civil_war", "/how_much_civil_war@au_conf_bot"}
     return False
 
 
@@ -88,5 +102,26 @@ async def civil_war(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     upsert_civil_war_last_used_at(db_path, user.id, now)
     force_success = should_force_success(message.text, user.id)
-    selected_image = get_success_image_path() if force_success or random.random() < SUCCESS_CHANCE else get_fail_image_path()
+    is_success = force_success or random.random() < SUCCESS_CHANCE
+    update_civil_war_stats(db_path, user.id, is_success)
+    selected_image = get_success_image_path() if is_success else get_fail_image_path()
     await _send_image(update, selected_image)
+
+
+async def civil_war_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.effective_message
+    user = update.effective_user
+    if message is None or user is None:
+        return
+
+    db_path = os.getenv("DB_PATH")
+    attempts, successes = get_civil_war_stats(db_path, user.id)
+    failures = attempts - successes
+    winrate = 0 if attempts == 0 else (successes / attempts) * 100
+
+    await message.reply_text(
+        f"Пытался устроить войну = {attempts}\n"
+        f"Спровоцировал гражданскую войну = {successes}\n"
+        f"Мастурбировал = {failures}\n"
+        f"Винрейт = {winrate:.2f}%"
+    )

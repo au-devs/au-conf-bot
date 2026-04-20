@@ -30,3 +30,9 @@ CREATE TABLE IF NOT EXISTS civil_war_cooldowns (
     user_id INTEGER NOT NULL PRIMARY KEY,
     last_used_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS civil_war_stats (
+    user_id INTEGER NOT NULL PRIMARY KEY,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    successes INTEGER NOT NULL DEFAULT 0
+);

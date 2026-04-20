@@ -23,6 +23,19 @@ def ensure_civil_war_cooldowns_table(conn: sqlite3.Connection) -> None:
     )
 
 
+def ensure_civil_war_stats_table(conn: sqlite3.Connection) -> None:
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS civil_war_stats (
+            user_id INTEGER NOT NULL PRIMARY KEY,
+            attempts INTEGER NOT NULL DEFAULT 0,
+            successes INTEGER NOT NULL DEFAULT 0
+        )
+        """
+    )
+
+
 def get_db_tables(db_path: str) -> list:
     logger.info(f"Fetching tables from database at {db_path}")
     tables = []
@@ -309,6 +322,43 @@ def upsert_civil_war_last_used_at(db_path: str, user_id: int, last_used_at: date
             conn.commit()
     except Exception as e:
         logger.error(f"Error updating civil war cooldown for user_id={user_id} in database at {db_path}: {str(e)}")
+
+
+def update_civil_war_stats(db_path: str, user_id: int, is_success: bool) -> None:
+    logger.info(f"Updating civil war stats for user_id={user_id} in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_stats_table(conn)
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO civil_war_stats (user_id, attempts, successes)
+                VALUES (?, 1, ?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    attempts = attempts + 1,
+                    successes = successes + excluded.successes
+                """,
+                (user_id, 1 if is_success else 0),
+            )
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error updating civil war stats for user_id={user_id} in database at {db_path}: {str(e)}")
+
+
+def get_civil_war_stats(db_path: str, user_id: int) -> tuple[int, int]:
+    logger.info(f"Fetching civil war stats for user_id={user_id} from database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_stats_table(conn)
+            cursor = conn.cursor()
+            cursor.execute("SELECT attempts, successes FROM civil_war_stats WHERE user_id = ?", (user_id,))
+            row = cursor.fetchone()
+            if row is None:
+                return 0, 0
+            return int(row[0]), int(row[1])
+    except Exception as e:
+        logger.error(f"Error fetching civil war stats for user_id={user_id} from database at {db_path}: {str(e)}")
+        return 0, 0
 
 def reset_birthday_today_reminders(db_path: str) -> None:
     logger.info(f"Resetting birthday_today reminders in database at {db_path}")

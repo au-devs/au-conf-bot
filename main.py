@@ -7,6 +7,7 @@ from handlers.new_database import new_database
 from handlers.message_handler import message_handler, username_updater
 from handlers.get_users import get_users
 from handlers.add_user import add_user
+from handlers.civil_war import civil_war
 from handlers.remove_user import remove_user_handler
 from handlers.user_info import user_info
 from handlers.edit_user_info import edit_info
@@ -32,6 +33,7 @@ async def post_init(application: Application) -> None:
         [BotCommand("start", "Начало квиза"),
          BotCommand("info", "Вывод информации о себе"),
          BotCommand('edit_info', "Изменение информации о себе"),
+         BotCommand("civil_war", "Гражданская война"),
          BotCommand("new_database", "[ADMIN] Создание новой базы данных пользователей"),
          BotCommand("add_user", "[ADMIN] Добавление нового пользователя"),
          BotCommand("get_users", "[ADMIN] Список всех пользователей"),
@@ -55,6 +57,7 @@ def main() -> None:
     application.add_handler(CommandHandler("info", user_info))
     application.add_handler(CommandHandler("remove_user", remove_user_handler))
     application.add_handler(CommandHandler("edit_info", edit_info))
+    application.add_handler(CommandHandler("civil_war", civil_war))
     # Add message handlers. We explicitly exclude command updates from the generic
     # message_handler, otherwise the command message itself (e.g. "/start") would be
     # consumed by the quiz state machine and stored as an answer to the next question.

@@ -9,6 +9,7 @@ from telegram import Update, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardR
 from telegram.ext import ContextTypes
 from db.database import add_user, get_db_users, update_user, update_reminder, get_reminder_status, \
     reset_birthday_today_reminders, update_username
+from handlers.civil_war import civil_war, is_civil_war_trigger
 from models.user_manager import create_user, get_closest_birthday
 from util.util import markdown_escape
 
@@ -77,6 +78,10 @@ async def update_user_data(update: Update, context: ContextTypes, next_state: st
     await update.message.reply_text(STATE_RESPONSE_MAP.get(next_state))
 
 async def message_handler(update: Update, context: ContextTypes) -> None:
+    if is_civil_war_trigger(update.effective_message.text if update.effective_message else None):
+        await civil_war(update, context)
+        return
+
     if (context.user_data.get('state') in QUIZ_STATE_TO_FIELD.keys() and update.message.chat.id ==
             context.user_data.get('quiz_chat_id')):
         await process_quiz(update, context)
@@ -196,4 +201,3 @@ async def username_updater(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 f"{user.tg_username!r} -> {actual_name!r}"
             )
             update_username(db_path, actual_name, user.user_id)
-

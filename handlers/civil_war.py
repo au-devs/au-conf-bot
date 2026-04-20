@@ -17,9 +17,19 @@ COOLDOWN = datetime.timedelta(hours=1)
 SUCCESS_CHANCE = 0.0666
 COMMAND_TEXT = "гражданская война"
 ADMIN_FORCE_COMMAND_TEXT = "/civil-war"
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-SUCCESS_IMAGE_PATH = PROJECT_ROOT / "civilvar.jpg"
-FAIL_IMAGE_PATH = PROJECT_ROOT / "fail.jpg"
+DEFAULT_ASSETS_DIR = Path("/data/assets")
+
+
+def get_assets_dir() -> Path:
+    return Path(os.getenv("ASSETS_DIR", str(DEFAULT_ASSETS_DIR)))
+
+
+def get_success_image_path() -> Path:
+    return get_assets_dir() / "civilwar.jpg"
+
+
+def get_fail_image_path() -> Path:
+    return get_assets_dir() / "fail.jpg"
 
 
 def is_civil_war_trigger(text: str | None) -> bool:
@@ -78,5 +88,5 @@ async def civil_war(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     upsert_civil_war_last_used_at(db_path, user.id, now)
     force_success = should_force_success(message.text, user.id)
-    selected_image = SUCCESS_IMAGE_PATH if force_success or random.random() < SUCCESS_CHANCE else FAIL_IMAGE_PATH
+    selected_image = get_success_image_path() if force_success or random.random() < SUCCESS_CHANCE else get_fail_image_path()
     await _send_image(update, selected_image)

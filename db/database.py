@@ -281,6 +281,20 @@ def get_reminder_status(db_path: str, user_id: int, tg_username: str, reminder_t
         return False
 
 
+def reset_user_reminders(db_path: str, user_id: int, reminder_types: list[str]) -> None:
+    if not reminder_types:
+        return
+    logger.info(f"Resetting reminders {reminder_types} for user_id={user_id} in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            assignments = ", ".join(f"{reminder_type} = 0" for reminder_type in reminder_types)
+            cursor.execute(f"UPDATE reminders SET {assignments} WHERE user_id = ?", (user_id,))
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error resetting reminders {reminder_types} for user_id={user_id} in database at {db_path}: {str(e)}")
+
+
 def reset_reminders(db_path: str) -> None:
     logger.info(f"Resetting all reminders in database at {db_path}")
     try:

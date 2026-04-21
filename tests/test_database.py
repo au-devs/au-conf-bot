@@ -63,6 +63,18 @@ class TestDatabase(unittest.TestCase):
         self.assertEqual(attempts, 3)
         self.assertEqual(successes, 1)
 
+    def test_reset_user_reminders(self):
+        test_user = create_user({'user_id': 1, 'name': 'Test User', 'tg_username': '@test_user', 'birthday': '01.01.2000',
+                                 'wishlist_url': 'https://example1.com', 'money_gifts': True, 'funny_gifts': True})
+        db.add_user(self.db_path, test_user)
+        db.update_reminder(self.db_path, 1, '@test_user', 'reminder_14_days')
+        db.update_reminder(self.db_path, 1, '@test_user', 'birthday_today')
+
+        db.reset_user_reminders(self.db_path, 1, ['reminder_14_days'])
+
+        self.assertFalse(db.get_reminder_status(self.db_path, 1, '@test_user', 'reminder_14_days'))
+        self.assertTrue(db.get_reminder_status(self.db_path, 1, '@test_user', 'birthday_today'))
+
 
 if __name__ == '__main__':
     unittest.main()

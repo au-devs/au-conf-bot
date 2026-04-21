@@ -5,12 +5,13 @@ import os
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from db.database import get_db_users, get_reminder_status, reset_birthday_today_reminders, update_reminder
+from db.database import get_db_users, get_reminder_status, reset_user_reminders, update_reminder
 from models.user_manager import get_closest_birthday
 from util.util import markdown_escape
 
 
 logger = logging.getLogger(__name__)
+ADVANCE_REMINDER_TYPES = ['reminder_14_days', 'reminder_7_days', 'reminder_1_days']
 
 
 async def process_birthday_reminders(update: Update, context: ContextTypes) -> None:
@@ -27,6 +28,10 @@ async def process_birthday_reminders(update: Update, context: ContextTypes) -> N
             continue
         birthday_date = get_closest_birthday(user)
         days_until_birthday = (birthday_date - datetime.date.today()).days
+        if days_until_birthday > 14:
+            reset_user_reminders(db_path, user.user_id, ADVANCE_REMINDER_TYPES)
+        if days_until_birthday != 0:
+            reset_user_reminders(db_path, user.user_id, ['birthday_today'])
         if days_until_birthday in [14, 7, 1]:
             reminder_type = f"reminder_{days_until_birthday}_days"
             if get_reminder_status(db_path, user.user_id, user.tg_username, reminder_type):
@@ -48,4 +53,3 @@ async def process_birthday_reminders(update: Update, context: ContextTypes) -> N
                 parse_mode='MarkdownV2'
             )
             update_reminder(db_path, user.user_id, user.tg_username, 'birthday_today')
-    reset_birthday_today_reminders(db_path)

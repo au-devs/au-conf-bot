@@ -28,10 +28,14 @@ from handlers.civil_war import _get_success_caption, _send_image, _send_text
 
 
 def build_update(thread_id: int = 42):
-    chat = SimpleNamespace(send_message=AsyncMock(), send_photo=AsyncMock())
+    chat = SimpleNamespace(id=456)
     message = SimpleNamespace(message_thread_id=thread_id)
     user = SimpleNamespace(id=123, username='ramil', full_name='Рамиль', name='Рамиль')
     return SimpleNamespace(effective_chat=chat, effective_message=message, effective_user=user)
+
+
+def build_context():
+    return SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock(), send_photo=AsyncMock()))
 
 
 class TestCivilWarThreading(unittest.IsolatedAsyncioTestCase):
@@ -45,29 +49,34 @@ class TestCivilWarThreading(unittest.IsolatedAsyncioTestCase):
 
     async def test_send_text_keeps_current_topic(self):
         update = build_update()
+        context = build_context()
 
-        await _send_text(update, 'test')
+        await _send_text(context.bot, update, 'test')
 
-        update.effective_chat.send_message.assert_awaited_once()
-        self.assertEqual(update.effective_chat.send_message.await_args.kwargs['message_thread_id'], 42)
+        context.bot.send_message.assert_awaited_once()
+        self.assertEqual(context.bot.send_message.await_args.kwargs['message_thread_id'], 42)
+        self.assertEqual(context.bot.send_message.await_args.kwargs['chat_id'], 456)
 
     async def test_send_fail_image_keeps_current_topic(self):
         update = build_update()
+        context = build_context()
 
         with tempfile.NamedTemporaryFile(delete=False) as temp_file:
             temp_file.write(b'test')
             temp_path = Path(temp_file.name)
 
         try:
-            await _send_image(update, temp_path)
+            await _send_image(context.bot, update, temp_path)
         finally:
             os.unlink(temp_path)
 
-        update.effective_chat.send_photo.assert_awaited_once()
-        self.assertEqual(update.effective_chat.send_photo.await_args.kwargs['message_thread_id'], 42)
+        context.bot.send_photo.assert_awaited_once()
+        self.assertEqual(context.bot.send_photo.await_args.kwargs['message_thread_id'], 42)
+        self.assertEqual(context.bot.send_photo.await_args.kwargs['chat_id'], 456)
 
     async def test_send_success_image_goes_to_general(self):
         update = build_update()
+        context = build_context()
 
         with tempfile.NamedTemporaryFile(delete=False) as temp_file:
             temp_file.write(b'test')
@@ -75,6 +84,7 @@ class TestCivilWarThreading(unittest.IsolatedAsyncioTestCase):
 
         try:
             await _send_image(
+                context.bot,
                 update,
                 temp_path,
                 send_to_general=True,
@@ -83,12 +93,13 @@ class TestCivilWarThreading(unittest.IsolatedAsyncioTestCase):
         finally:
             os.unlink(temp_path)
 
-        update.effective_chat.send_photo.assert_awaited_once()
-        self.assertNotIn('message_thread_id', update.effective_chat.send_photo.await_args.kwargs)
+        context.bot.send_photo.assert_awaited_once()
+        self.assertNotIn('message_thread_id', context.bot.send_photo.await_args.kwargs)
         self.assertEqual(
-            update.effective_chat.send_photo.await_args.kwargs['caption'],
+            context.bot.send_photo.await_args.kwargs['caption'],
             '@ramil устроил гражданскую войну',
         )
+        self.assertEqual(context.bot.send_photo.await_args.kwargs['chat_id'], 456)
 
 
 if __name__ == '__main__':

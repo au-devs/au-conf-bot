@@ -98,35 +98,47 @@ def _get_success_caption(user) -> tuple[str, str | None]:
     return f'<a href="tg://user?id={user_id}">@{escaped_name}</a> устроил гражданскую войну', "HTML"
 
 
-async def _send_text(update: Update, text: str) -> None:
-    if update.effective_chat is None:
+def _get_chat_kwargs(update: Update, send_to_general: bool = False) -> dict:
+    chat = update.effective_chat
+    if chat is None:
+        return {}
+    chat_kwargs = {"chat_id": chat.id}
+    if not send_to_general:
+        chat_kwargs.update(_get_thread_kwargs(update))
+    return chat_kwargs
+
+
+async def _send_text(bot, update: Update, text: str) -> None:
+    chat_kwargs = _get_chat_kwargs(update)
+    if not chat_kwargs:
         return
-    await update.effective_chat.send_message(text, **_get_thread_kwargs(update))
+    await bot.send_message(text=text, **chat_kwargs)
 
 
 async def _send_image(
+    bot,
     update: Update,
     image_path: Path,
     send_to_general: bool = False,
     caption: str | None = None,
     parse_mode: str | None = None,
 ) -> None:
-    if update.effective_chat is None:
+    chat_kwargs = _get_chat_kwargs(update, send_to_general=send_to_general)
+    if not chat_kwargs:
         return
-    thread_kwargs = {} if send_to_general else _get_thread_kwargs(update)
     if not image_path.exists():
         logger.error(f"Image file does not exist: {image_path}")
-        await update.effective_chat.send_message(f"Файл не найден: {image_path.name}", **thread_kwargs)
+        await bot.send_message(text=f"Файл не найден: {image_path.name}", **chat_kwargs)
         return
 
-    photo_kwargs = dict(thread_kwargs)
+    photo_kwargs = dict(chat_kwargs)
     if caption is not None:
         photo_kwargs["caption"] = caption
     if parse_mode is not None:
         photo_kwargs["parse_mode"] = parse_mode
 
     with image_path.open("rb") as image:
-        await update.effective_chat.send_photo(photo=image, **photo_kwargs)
+        await bot.send_photo(photo=image, **photo_kwargs)
 
 
 async def civil_war(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -139,7 +151,7 @@ async def civil_war(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     db_path = os.getenv("DB_PATH")
     last_used_at = get_civil_war_last_used_at(db_path, user.id)
     if last_used_at is not None and now - last_used_at < COOLDOWN:
-        await _send_text(update, _get_remaining_cooldown_message(last_used_at, now))
+        await _send_text(context.bot, update, _get_remaining_cooldown_message(last_used_at, now))
         return
 
     upsert_civil_war_last_used_at(db_path, user.id, now)
@@ -149,6 +161,7 @@ async def civil_war(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     selected_image = get_success_image_path() if is_success else get_fail_image_path()
     caption, parse_mode = _get_success_caption(user) if is_success else (None, None)
     await _send_image(
+        context.bot,
         update,
         selected_image,
         send_to_general=is_success,
@@ -169,6 +182,7 @@ async def civil_war_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     winrate = 0 if attempts == 0 else (successes / attempts) * 100
 
     await _send_text(
+        context.bot,
         update,
         f"Пытался устроить войну = {attempts}\n"
         f"Спровоцировал гражданскую войну = {successes}\n"

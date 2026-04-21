@@ -53,8 +53,8 @@ from handlers.birthday_reminders import process_birthday_reminders
 
 def build_update():
     from_user = SimpleNamespace(id=123, name='Tester')
-    chat = SimpleNamespace(id=456)
-    message = SimpleNamespace(reply_text=AsyncMock(), from_user=from_user, chat=chat)
+    chat = SimpleNamespace(id=456, type='supergroup', send_message=AsyncMock())
+    message = SimpleNamespace(reply_text=AsyncMock(), from_user=from_user, chat=chat, message_thread_id=42)
     return SimpleNamespace(message=message, effective_message=message, effective_user=from_user, effective_chat=chat)
 
 
@@ -125,7 +125,8 @@ class TestBirthdayReminders(unittest.IsolatedAsyncioTestCase):
             await process_birthday_reminders(update, context)
 
         self.assertTrue(db.get_reminder_status(self.db_path, 1, '@test_user', 'birthday_today'))
-        update.message.reply_text.assert_awaited_once()
+        update.effective_chat.send_message.assert_awaited_once()
+        self.assertNotIn('message_thread_id', update.effective_chat.send_message.await_args.kwargs)
 
 
 if __name__ == '__main__':

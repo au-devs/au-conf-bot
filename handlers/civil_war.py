@@ -75,16 +75,25 @@ def _get_remaining_cooldown_message(last_used_at: datetime.datetime, now: dateti
     return f"Гражданскую войну можно запускать не чаще раза в час. Осталось: {hours:02d}:{minutes:02d}:{seconds:02d}"
 
 
+def _get_thread_kwargs(update: Update) -> dict:
+    message = update.effective_message
+    message_thread_id = getattr(message, "message_thread_id", None)
+    if message_thread_id is None:
+        return {}
+    return {"message_thread_id": message_thread_id}
+
+
 async def _send_image(update: Update, image_path: Path) -> None:
     if update.effective_chat is None:
         return
+    thread_kwargs = _get_thread_kwargs(update)
     if not image_path.exists():
         logger.error(f"Image file does not exist: {image_path}")
-        await update.effective_chat.send_message(f"Файл не найден: {image_path.name}")
+        await update.effective_chat.send_message(f"Файл не найден: {image_path.name}", **thread_kwargs)
         return
 
     with image_path.open("rb") as image:
-        await update.effective_chat.send_photo(photo=image)
+        await update.effective_chat.send_photo(photo=image, **thread_kwargs)
 
 
 async def civil_war(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

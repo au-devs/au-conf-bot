@@ -15,6 +15,10 @@ ADVANCE_REMINDER_TYPES = ['reminder_14_days', 'reminder_7_days', 'reminder_1_day
 
 
 async def process_birthday_reminders(update: Update, context: ContextTypes) -> None:
+    chat = update.effective_chat
+    if chat is None or getattr(chat, 'type', None) not in {'group', 'supergroup'}:
+        return
+
     last_birthday_check = context.chat_data.get('last_birthday_check')
     if last_birthday_check is not None and (datetime.datetime.now() - last_birthday_check).days < 1:
         return
@@ -36,7 +40,7 @@ async def process_birthday_reminders(update: Update, context: ContextTypes) -> N
             reminder_type = f"reminder_{days_until_birthday}_days"
             if get_reminder_status(db_path, user.user_id, user.tg_username, reminder_type):
                 continue
-            await update.message.reply_text(
+            await chat.send_message(
                 f"❗❗❗ ВСЕМ ВНИМАНИЕ ЭТО НЕ УЧЕБНАЯ ТРЕВОГА ❗❗❗\n"
                 f"Скоро день рождения у {markdown_escape(user.tg_username)}\n"
                 f"*Дата:* {markdown_escape(user.birthday)}\n"
@@ -47,7 +51,7 @@ async def process_birthday_reminders(update: Update, context: ContextTypes) -> N
         elif days_until_birthday == 0:
             if get_reminder_status(db_path, user.user_id, user.tg_username, 'birthday_today'):
                 continue
-            await update.message.reply_text(
+            await chat.send_message(
                 f"❗❗❗ ВСЕМ ВНИМАНИЕ ЭТО АВТОМАТИЧЕСКОЕ ПОЗДРАВЛЕНИЕ ❗❗❗\n"
                 f"🎉 🎉 🎉  С ДНЕМ РОЖДЕНИЯ {markdown_escape(user.tg_username)}  🎉 🎉 🎉\n",
                 parse_mode='MarkdownV2'

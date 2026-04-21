@@ -1,4 +1,4 @@
-FROM python:3.12-slim as bot
+FROM python:3.12-slim AS bot
 
 ENV ENV_FILE ".env"
 

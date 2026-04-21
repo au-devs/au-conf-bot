@@ -1,4 +1,5 @@
 import datetime
+import html
 import logging
 import os
 import random
@@ -83,23 +84,49 @@ def _get_thread_kwargs(update: Update) -> dict:
     return {"message_thread_id": message_thread_id}
 
 
+def _get_success_caption(user) -> tuple[str, str | None]:
+    username = getattr(user, "username", None)
+    if username:
+        return f"@{username} устроил гражданскую войну", None
+
+    display_name = getattr(user, "full_name", None) or getattr(user, "name", None) or "пользователь"
+    user_id = getattr(user, "id", None)
+    if user_id is None:
+        return f"@{display_name} устроил гражданскую войну", None
+
+    escaped_name = html.escape(display_name)
+    return f'<a href="tg://user?id={user_id}">@{escaped_name}</a> устроил гражданскую войну', "HTML"
+
+
 async def _send_text(update: Update, text: str) -> None:
     if update.effective_chat is None:
         return
     await update.effective_chat.send_message(text, **_get_thread_kwargs(update))
 
 
-async def _send_image(update: Update, image_path: Path) -> None:
+async def _send_image(
+    update: Update,
+    image_path: Path,
+    send_to_general: bool = False,
+    caption: str | None = None,
+    parse_mode: str | None = None,
+) -> None:
     if update.effective_chat is None:
         return
-    thread_kwargs = _get_thread_kwargs(update)
+    thread_kwargs = {} if send_to_general else _get_thread_kwargs(update)
     if not image_path.exists():
         logger.error(f"Image file does not exist: {image_path}")
         await update.effective_chat.send_message(f"Файл не найден: {image_path.name}", **thread_kwargs)
         return
 
+    photo_kwargs = dict(thread_kwargs)
+    if caption is not None:
+        photo_kwargs["caption"] = caption
+    if parse_mode is not None:
+        photo_kwargs["parse_mode"] = parse_mode
+
     with image_path.open("rb") as image:
-        await update.effective_chat.send_photo(photo=image, **thread_kwargs)
+        await update.effective_chat.send_photo(photo=image, **photo_kwargs)
 
 
 async def civil_war(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -120,7 +147,14 @@ async def civil_war(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     is_success = force_success or random.random() < SUCCESS_CHANCE
     update_civil_war_stats(db_path, user.id, is_success)
     selected_image = get_success_image_path() if is_success else get_fail_image_path()
-    await _send_image(update, selected_image)
+    caption, parse_mode = _get_success_caption(user) if is_success else (None, None)
+    await _send_image(
+        update,
+        selected_image,
+        send_to_general=is_success,
+        caption=caption,
+        parse_mode=parse_mode,
+    )
 
 
 async def civil_war_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

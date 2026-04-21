@@ -83,6 +83,12 @@ def _get_thread_kwargs(update: Update) -> dict:
     return {"message_thread_id": message_thread_id}
 
 
+async def _send_text(update: Update, text: str) -> None:
+    if update.effective_chat is None:
+        return
+    await update.effective_chat.send_message(text, **_get_thread_kwargs(update))
+
+
 async def _send_image(update: Update, image_path: Path) -> None:
     if update.effective_chat is None:
         return
@@ -106,7 +112,7 @@ async def civil_war(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     db_path = os.getenv("DB_PATH")
     last_used_at = get_civil_war_last_used_at(db_path, user.id)
     if last_used_at is not None and now - last_used_at < COOLDOWN:
-        await message.reply_text(_get_remaining_cooldown_message(last_used_at, now))
+        await _send_text(update, _get_remaining_cooldown_message(last_used_at, now))
         return
 
     upsert_civil_war_last_used_at(db_path, user.id, now)
@@ -128,7 +134,8 @@ async def civil_war_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     failures = attempts - successes
     winrate = 0 if attempts == 0 else (successes / attempts) * 100
 
-    await message.reply_text(
+    await _send_text(
+        update,
         f"Пытался устроить войну = {attempts}\n"
         f"Спровоцировал гражданскую войну = {successes}\n"
         f"Мастурбировал = {failures}\n"

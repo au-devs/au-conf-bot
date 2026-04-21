@@ -24,7 +24,7 @@ telegram_ext_module.ContextTypes = DummyContextTypes
 sys.modules.setdefault('telegram', telegram_module)
 sys.modules.setdefault('telegram.ext', telegram_ext_module)
 
-from handlers.civil_war import _send_image
+from handlers.civil_war import _send_image, _send_text
 
 
 def build_update(thread_id: int = 42):
@@ -34,6 +34,14 @@ def build_update(thread_id: int = 42):
 
 
 class TestCivilWarThreading(unittest.IsolatedAsyncioTestCase):
+    async def test_send_text_keeps_current_topic(self):
+        update = build_update()
+
+        await _send_text(update, 'test')
+
+        update.effective_chat.send_message.assert_awaited_once()
+        self.assertEqual(update.effective_chat.send_message.await_args.kwargs['message_thread_id'], 42)
+
     async def test_send_image_keeps_current_topic(self):
         update = build_update()
 

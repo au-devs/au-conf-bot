@@ -9,6 +9,7 @@ import models.user as User
 
 logger = logging.getLogger(__name__)
 script_dir = os.path.dirname(os.path.abspath(__file__))
+ALLOWED_USER_FIELDS = {'name', 'birthday', 'wishlist_url', 'money_gifts', 'funny_gifts', 'tg_username'}
 
 
 def ensure_civil_war_cooldowns_table(conn: sqlite3.Connection) -> None:
@@ -192,6 +193,9 @@ def update_user(db_path: str, user_id: int, field_to_update: str, updated_data: 
     logger.info(f"Updating user {user} in database at {db_path}")
     if user is None:
         logger.info(f"User with id {user_id} not found in database at {db_path}")
+        return
+    if field_to_update not in ALLOWED_USER_FIELDS:
+        logger.error(f"Attempted to update unsupported field {field_to_update!r}")
         return
     try:
         with sqlite3.connect(db_path) as conn:

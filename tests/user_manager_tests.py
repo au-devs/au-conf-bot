@@ -1,6 +1,6 @@
 import unittest
 import datetime
-from models.user_manager import create_user, is_near_birthday
+from models.user_manager import create_user, is_near_birthday, parse_bool_value
 
 
 class TestUserManager(unittest.TestCase):
@@ -23,6 +23,12 @@ class TestUserManager(unittest.TestCase):
         self.assertFalse(is_near_birthday(test_user2))
         self.assertTrue(is_near_birthday(test_user3))
         self.assertFalse(is_near_birthday(test_user4))
+
+    def test_parse_bool_value(self):
+        self.assertTrue(parse_bool_value('Да'))
+        self.assertFalse(parse_bool_value('Нет'))
+        self.assertTrue(parse_bool_value(True))
+        self.assertFalse(parse_bool_value(False))
 
 
 if __name__ == '__main__':

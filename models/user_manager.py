@@ -3,6 +3,18 @@ import datetime
 from models.user import User
 
 
+def parse_bool_value(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized_value = value.strip().lower()
+        if normalized_value in {'да', 'true', '1', 'yes'}:
+            return True
+        if normalized_value in {'нет', 'false', '0', 'no'}:
+            return False
+    return bool(value)
+
+
 def create_user(user_data: dict) -> User:
     """
     Create a new User instance from a user_data telegram dictionary.
@@ -11,7 +23,8 @@ def create_user(user_data: dict) -> User:
     """
     return User(user_id=user_data['user_id'], name=user_data['name'], tg_username=user_data['tg_username'],
                 birthday=user_data['birthday'], wishlist_url=user_data['wishlist_url'],
-                money_gifts=bool(user_data['money_gifts']), funny_gifts=bool(user_data['funny_gifts']))
+                money_gifts=parse_bool_value(user_data['money_gifts']),
+                funny_gifts=parse_bool_value(user_data['funny_gifts']))
 
 
 def update_user_fields(user: User, updated_data: dict) -> None:

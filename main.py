@@ -1,5 +1,6 @@
 import os
 import logging
+from pathlib import Path
 
 from dotenv import load_dotenv
 from handlers.start_handler import start
@@ -7,15 +8,16 @@ from handlers.new_database import new_database
 from handlers.message_handler import message_handler, username_updater
 from handlers.get_users import get_users
 from handlers.add_user import add_user
-from handlers.civil_war import civil_war, civil_war_stats
+from handlers.civil_war import civil_war, civil_war_stats, get_assets_dir
 from handlers.remove_user import remove_user_handler
 from handlers.user_info import user_info
 from handlers.edit_user_info import edit_info
 from telegram import Update, BotCommand
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, PicklePersistence, filters
 
 load_dotenv()  # Load environment variables from .env file
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')  # Get bot token from environment variable
+BOT_PERSISTENCE_PATH = get_assets_dir() / 'bot_persistence.pkl'
 # Enable logging
 
 logging.basicConfig(
@@ -45,7 +47,9 @@ async def post_init(application: Application) -> None:
 def main() -> None:
     # Create the Application
     try:
-        application = Application.builder().token(TELEGRAM_BOT_TOKEN).post_init(post_init).build()
+        Path(BOT_PERSISTENCE_PATH).parent.mkdir(parents=True, exist_ok=True)
+        persistence = PicklePersistence(filepath=str(BOT_PERSISTENCE_PATH))
+        application = Application.builder().token(TELEGRAM_BOT_TOKEN).persistence(persistence).post_init(post_init).build()
     except ValueError:
         logger.error("TELEGRAM_BOT_TOKEN is not set")
         exit(1)

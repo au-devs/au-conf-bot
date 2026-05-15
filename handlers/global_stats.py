@@ -65,7 +65,7 @@ def format_global_stats_message(db_path: str) -> str:
         "",
     ]
     for place, (_, display_name, attempts, successes, winrate, adjusted_winrate) in enumerate(leaderboard, start=1):
-        failures = attempts - successes
+        failures = max(attempts - successes, 0)
         place_marker = PLACE_MARKERS.get(place, f"{place}.")
         lines.append(
             f"{place_marker} {display_name}: {winrate * 100:.2f}% "
@@ -164,22 +164,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     if not bypass_cooldown:
         upsert_command_last_used_at(db_path, STATS_COMMAND, now)
-    await sync_civil_war_users(update, context, db_path)
-    await message.reply_text(format_global_stats_message(db_path))
-
-
-async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    message = update.effective_message
-    chat = update.effective_chat
-    user = update.effective_user
-    if message is None:
-        return
-    if not is_bot_admin(getattr(user, "id", None)):
-        logger.info(f"Non-admin user_id={getattr(user, 'id', None)} tried to run /admin_stats")
-        return
-
-    register_stats_chat(context, chat.id if chat is not None else None)
-    db_path = os.getenv("DB_PATH")
     await sync_civil_war_users(update, context, db_path)
     await message.reply_text(format_global_stats_message(db_path))
 

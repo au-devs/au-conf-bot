@@ -8,6 +8,14 @@ DB_PATH=users.sqlite
 ASSETS_DIR=/data/assets
 CIVIL_WAR_COOLDOWN_HOURS=1
 STATS_COOLDOWN_HOURS=3
+RARE_CIVIL_WAR_CAPTION_TEMPLATE=съел сладкий пирог, +10 винов
+```
+
+Assets in ASSETS_DIR:
+```bash
+civilwar.jpg
+fail.jpg
+rare.jpg
 ```
 
 How to run:

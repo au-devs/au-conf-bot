@@ -10,7 +10,7 @@ from handlers.message_handler import message_handler, username_updater
 from handlers.get_users import get_users
 from handlers.add_user import add_user
 from handlers.civil_war import civil_war, civil_war_stats, get_assets_dir
-from handlers.global_stats import admin_stats, send_daily_stats, stats
+from handlers.global_stats import send_daily_stats, stats
 from handlers.remove_user import remove_user_handler
 from handlers.user_info import user_info
 from handlers.edit_user_info import edit_info
@@ -40,7 +40,6 @@ async def post_init(application: Application) -> None:
          BotCommand("civil_war", "Гражданская война"),
          BotCommand("how_much_civil_war", "Статистика гражданской войны"),
          BotCommand("stats", "Топ-10 винрейта гражданской войны"),
-         BotCommand("admin_stats", "[ADMIN] Статистика гражданской войны без таймаута"),
          BotCommand("new_database", "[ADMIN] Создание новой базы данных пользователей"),
          BotCommand("add_user", "[ADMIN] Добавление нового пользователя"),
          BotCommand("get_users", "[ADMIN] Список всех пользователей"),
@@ -69,7 +68,6 @@ def main() -> None:
     application.add_handler(CommandHandler("civil_war", civil_war))
     application.add_handler(CommandHandler("how_much_civil_war", civil_war_stats))
     application.add_handler(CommandHandler("stats", stats))
-    application.add_handler(CommandHandler("admin_stats", admin_stats))
     if application.job_queue is None:
         logger.error("JobQueue is not available. Install python-telegram-bot[job-queue] to enable daily stats.")
     else:

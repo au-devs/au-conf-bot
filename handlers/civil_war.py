@@ -10,15 +10,16 @@ from telegram.ext import ContextTypes
 
 from db.database import get_civil_war_last_used_at, upsert_civil_war_last_used_at, update_civil_war_stats, \
     get_civil_war_stats
-from handlers.admin_checker import is_admin
 
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_COOLDOWN_HOURS = 1
 SUCCESS_CHANCE = 0.0666
+RARE_SUCCESS_CHANCE = 0.00666
+RARE_SUCCESS_POINTS = 10
+DEFAULT_RARE_CAPTION_TEMPLATE = "налудил себе +10 винов"
 COMMAND_TEXT = "гражданская война"
-ADMIN_FORCE_COMMAND_TEXT = "/civil-war"
 STATS_COMMAND_TEXT = "/how-much-civil-war"
 DEFAULT_ASSETS_DIR = Path("/data/assets")
 
@@ -50,13 +51,19 @@ def get_fail_image_path() -> Path:
     return get_assets_dir() / "fail.jpg"
 
 
+def get_rare_image_path() -> Path:
+    return get_assets_dir() / "rare.jpg"
+
+
+def get_rare_caption_template() -> str:
+    return os.getenv("RARE_CIVIL_WAR_CAPTION_TEMPLATE", DEFAULT_RARE_CAPTION_TEMPLATE)
+
+
 def is_civil_war_trigger(text: str | None) -> bool:
     if text is None:
         return False
     normalized_text = " ".join(text.strip().lower().split())
     if normalized_text == COMMAND_TEXT:
-        return True
-    if normalized_text in {ADMIN_FORCE_COMMAND_TEXT, f"{ADMIN_FORCE_COMMAND_TEXT}@au_conf_bot"}:
         return True
     if normalized_text.startswith("/civil_war"):
         command_part = normalized_text.split()[0]
@@ -74,13 +81,6 @@ def is_civil_war_stats_trigger(text: str | None) -> bool:
         command_part = normalized_text.split()[0]
         return command_part in {"/how_much_civil_war", "/how_much_civil_war@au_conf_bot"}
     return False
-
-
-def should_force_success(text: str | None, user_id: int) -> bool:
-    if text is None or not is_admin(user_id):
-        return False
-    normalized_text = " ".join(text.strip().lower().split())
-    return normalized_text in {ADMIN_FORCE_COMMAND_TEXT, f"{ADMIN_FORCE_COMMAND_TEXT}@au_conf_bot"}
 
 
 def _get_remaining_cooldown_message(last_used_at: datetime.datetime, now: datetime.datetime) -> str:
@@ -116,6 +116,28 @@ def _get_success_caption(user) -> tuple[str, str | None]:
 
     escaped_name = html.escape(display_name)
     return f'<a href="tg://user?id={user_id}">@{escaped_name}</a> устроил гражданскую войну', "HTML"
+
+
+def _get_user_caption_mention(user) -> tuple[str, str | None]:
+    username = getattr(user, "username", None)
+    if username:
+        return f"@{username}", None
+
+    display_name = getattr(user, "full_name", None) or getattr(user, "name", None) or "пользователь"
+    user_id = getattr(user, "id", None)
+    if user_id is None:
+        return f"@{display_name}", None
+
+    escaped_name = html.escape(display_name)
+    return f'<a href="tg://user?id={user_id}">@{escaped_name}</a>', "HTML"
+
+
+def _get_rare_success_caption(user) -> tuple[str, str | None]:
+    mention, parse_mode = _get_user_caption_mention(user)
+    template = get_rare_caption_template()
+    if parse_mode == "HTML":
+        template = html.escape(template)
+    return f"{mention} {template}", parse_mode
 
 
 def _get_user_display_name(user) -> str | None:
@@ -183,11 +205,17 @@ async def civil_war(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     upsert_civil_war_last_used_at(db_path, user.id, now)
-    force_success = should_force_success(message.text, user.id)
-    is_success = force_success or random.random() < SUCCESS_CHANCE
-    update_civil_war_stats(db_path, user.id, is_success, _get_user_display_name(user))
-    selected_image = get_success_image_path() if is_success else get_fail_image_path()
-    caption, parse_mode = _get_success_caption(user) if is_success else (None, None)
+    roll = random.random()
+    is_rare_success = roll < RARE_SUCCESS_CHANCE
+    is_success = is_rare_success or roll < SUCCESS_CHANCE
+    successes_delta = RARE_SUCCESS_POINTS if is_rare_success else int(is_success)
+    update_civil_war_stats(db_path, user.id, successes_delta, _get_user_display_name(user))
+    if is_rare_success:
+        selected_image = get_rare_image_path()
+        caption, parse_mode = _get_rare_success_caption(user)
+    else:
+        selected_image = get_success_image_path() if is_success else get_fail_image_path()
+        caption, parse_mode = _get_success_caption(user) if is_success else (None, None)
     await _send_image(
         context.bot,
         update,
@@ -206,7 +234,7 @@ async def civil_war_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     db_path = os.getenv("DB_PATH")
     attempts, successes = get_civil_war_stats(db_path, user.id)
-    failures = attempts - successes
+    failures = max(attempts - successes, 0)
     winrate = 0 if attempts == 0 else (successes / attempts) * 100
 
     await _send_text(

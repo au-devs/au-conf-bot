@@ -24,7 +24,8 @@ telegram_ext_module.ContextTypes = DummyContextTypes
 sys.modules.setdefault('telegram', telegram_module)
 sys.modules.setdefault('telegram.ext', telegram_ext_module)
 
-from handlers.civil_war import _get_success_caption, _get_user_display_name, _send_image, _send_text, civil_war, get_cooldown
+from handlers.civil_war import _get_rare_success_caption, _get_success_caption, _get_user_display_name, _send_image, \
+    _send_text, civil_war, get_cooldown, is_civil_war_trigger
 
 
 def build_update(thread_id: int = 42):
@@ -66,6 +67,15 @@ class TestCivilWarThreading(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(display_name, '@ramil')
 
+    def test_rare_success_caption_uses_env_template(self):
+        update = build_update()
+
+        with patch('handlers.civil_war.os.getenv', return_value='съел сладкий пирог, +10 винов'):
+            caption, parse_mode = _get_rare_success_caption(update.effective_user)
+
+        self.assertEqual(caption, '@ramil съел сладкий пирог, +10 винов')
+        self.assertIsNone(parse_mode)
+
     async def test_civil_war_stores_user_display_name(self):
         update = build_update()
         update.effective_message.text = 'гражданская война'
@@ -79,7 +89,6 @@ class TestCivilWarThreading(unittest.IsolatedAsyncioTestCase):
             with patch('handlers.civil_war.os.getenv', side_effect=lambda name, default=None: 'users_test.sqlite' if name == 'DB_PATH' else default), \
                     patch('handlers.civil_war.get_civil_war_last_used_at', return_value=None), \
                     patch('handlers.civil_war.upsert_civil_war_last_used_at'), \
-                    patch('handlers.civil_war.is_admin', return_value=False), \
                     patch('handlers.civil_war.random.random', return_value=1), \
                     patch('handlers.civil_war.get_fail_image_path', return_value=temp_path), \
                     patch('handlers.civil_war.update_civil_war_stats') as update_stats:
@@ -87,7 +96,36 @@ class TestCivilWarThreading(unittest.IsolatedAsyncioTestCase):
         finally:
             os.unlink(temp_path)
 
-        update_stats.assert_called_once_with('users_test.sqlite', 123, False, '@ramil')
+        update_stats.assert_called_once_with('users_test.sqlite', 123, 0, '@ramil')
+
+    async def test_civil_war_rare_success_adds_ten_wins_and_uses_rare_caption(self):
+        update = build_update()
+        update.effective_message.text = 'гражданская война'
+        context = build_context()
+
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            temp_file.write(b'test')
+            temp_path = Path(temp_file.name)
+
+        try:
+            with patch('handlers.civil_war.os.getenv', side_effect=lambda name, default=None: 'users_test.sqlite' if name == 'DB_PATH' else default), \
+                    patch('handlers.civil_war.get_civil_war_last_used_at', return_value=None), \
+                    patch('handlers.civil_war.upsert_civil_war_last_used_at'), \
+                    patch('handlers.civil_war.random.random', return_value=0.001), \
+                    patch('handlers.civil_war.get_rare_image_path', return_value=temp_path), \
+                    patch('handlers.civil_war.update_civil_war_stats') as update_stats:
+                await civil_war(update, context)
+        finally:
+            os.unlink(temp_path)
+
+        update_stats.assert_called_once_with('users_test.sqlite', 123, 10, '@ramil')
+        self.assertEqual(
+            context.bot.send_photo.await_args.kwargs['caption'],
+            '@ramil налудил себе +10 винов',
+        )
+
+    def test_civil_war_dash_command_is_not_trigger(self):
+        self.assertFalse(is_civil_war_trigger('/civil-war'))
 
     async def test_send_text_keeps_current_topic(self):
         update = build_update()

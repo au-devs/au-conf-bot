@@ -361,7 +361,12 @@ def upsert_civil_war_last_used_at(db_path: str, user_id: int, last_used_at: date
         logger.error(f"Error updating civil war cooldown for user_id={user_id} in database at {db_path}: {str(e)}")
 
 
-def update_civil_war_stats(db_path: str, user_id: int, is_success: bool, display_name: str | None = None) -> None:
+def update_civil_war_stats(
+        db_path: str,
+        user_id: int,
+        successes_delta: int | bool,
+        display_name: str | None = None,
+) -> None:
     logger.info(f"Updating civil war stats for user_id={user_id} in database at {db_path}")
     try:
         with sqlite3.connect(db_path) as conn:
@@ -376,7 +381,7 @@ def update_civil_war_stats(db_path: str, user_id: int, is_success: bool, display
                     attempts = attempts + 1,
                     successes = successes + excluded.successes
                 """,
-                (user_id, display_name, 1 if is_success else 0),
+                (user_id, display_name, int(successes_delta)),
             )
             conn.commit()
     except Exception as e:

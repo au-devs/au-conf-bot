@@ -24,7 +24,7 @@ telegram_ext_module.ContextTypes = DummyContextTypes
 sys.modules.setdefault('telegram', telegram_module)
 sys.modules.setdefault('telegram.ext', telegram_ext_module)
 
-from handlers.global_stats import admin_stats, can_bypass_stats_cooldown, format_global_stats_message, get_stats_cooldown, \
+from handlers.global_stats import can_bypass_stats_cooldown, format_global_stats_message, get_stats_cooldown, stats, \
     register_stats_chat
 
 
@@ -74,26 +74,26 @@ class TestGlobalStats(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(result)
 
-    async def test_admin_stats_does_not_touch_cooldown(self):
+    async def test_bot_admin_stats_does_not_touch_cooldown(self):
         message = SimpleNamespace(reply_text=AsyncMock())
         update = SimpleNamespace(
             effective_message=message,
-            effective_chat=SimpleNamespace(id=456),
+            effective_chat=SimpleNamespace(id=456, type='group'),
             effective_user=SimpleNamespace(id=123),
         )
-        context = SimpleNamespace(bot_data={})
+        context = SimpleNamespace(bot_data={}, bot=SimpleNamespace(get_chat_member=AsyncMock(return_value=None)))
 
         with patch('handlers.global_stats.is_admin', return_value=True), \
-                patch('handlers.global_stats.os.getenv', return_value=self.db_path), \
+                patch('handlers.global_stats.os.getenv', side_effect=lambda name, default=None: self.db_path if name == 'DB_PATH' else default), \
                 patch('handlers.global_stats.get_command_last_used_at') as get_last_used, \
                 patch('handlers.global_stats.upsert_command_last_used_at') as upsert_last_used:
-            await admin_stats(update, context)
+            await stats(update, context)
 
-        get_last_used.assert_not_called()
+        get_last_used.assert_called_once()
         upsert_last_used.assert_not_called()
         message.reply_text.assert_awaited_once()
 
-    async def test_admin_stats_fetches_missing_usernames_and_creates_users(self):
+    async def test_bot_admin_stats_fetches_missing_usernames_and_creates_users(self):
         db.update_civil_war_stats(self.db_path, 12345, True)
         message = SimpleNamespace(reply_text=AsyncMock())
         update = SimpleNamespace(
@@ -111,27 +111,13 @@ class TestGlobalStats(unittest.IsolatedAsyncioTestCase):
         )
 
         with patch('handlers.global_stats.is_admin', return_value=True), \
-                patch('handlers.global_stats.os.getenv', return_value=self.db_path):
-            await admin_stats(update, context)
+                patch('handlers.global_stats.os.getenv', side_effect=lambda name, default=None: self.db_path if name == 'DB_PATH' else default):
+            await stats(update, context)
 
         context.bot.get_chat_member.assert_awaited_once_with(chat_id=456, user_id=12345)
         user = db.get_user(self.db_path, 12345)
         self.assertEqual(user[2], '@missing_user')
         message.reply_text.assert_awaited_once()
-
-    async def test_non_admin_stats_does_not_reply(self):
-        message = SimpleNamespace(reply_text=AsyncMock())
-        update = SimpleNamespace(
-            effective_message=message,
-            effective_chat=SimpleNamespace(id=456),
-            effective_user=SimpleNamespace(id=123),
-        )
-        context = SimpleNamespace(bot_data={})
-
-        with patch('handlers.global_stats.is_admin', return_value=False):
-            await admin_stats(update, context)
-
-        message.reply_text.assert_not_awaited()
 
     def test_format_global_stats_message(self):
         test_user = create_user({'user_id': 1, 'name': 'Test User', 'tg_username': '@test_user', 'birthday': '01.01.2000',

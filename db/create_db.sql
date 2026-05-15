@@ -36,3 +36,8 @@ CREATE TABLE IF NOT EXISTS civil_war_stats (
     attempts INTEGER NOT NULL DEFAULT 0,
     successes INTEGER NOT NULL DEFAULT 0
 );
+
+CREATE TABLE IF NOT EXISTS command_cooldowns (
+    command_name VARCHAR(255) NOT NULL PRIMARY KEY,
+    last_used_at TEXT NOT NULL
+);

@@ -37,6 +37,18 @@ def ensure_civil_war_stats_table(conn: sqlite3.Connection) -> None:
     )
 
 
+def ensure_command_cooldowns_table(conn: sqlite3.Connection) -> None:
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS command_cooldowns (
+            command_name VARCHAR(255) NOT NULL PRIMARY KEY,
+            last_used_at TEXT NOT NULL
+        )
+        """
+    )
+
+
 def get_db_tables(db_path: str) -> list:
     logger.info(f"Fetching tables from database at {db_path}")
     tables = []
@@ -377,6 +389,72 @@ def get_civil_war_stats(db_path: str, user_id: int) -> tuple[int, int]:
     except Exception as e:
         logger.error(f"Error fetching civil war stats for user_id={user_id} from database at {db_path}: {str(e)}")
         return 0, 0
+
+
+def get_civil_war_leaderboard(db_path: str, limit: int = 10) -> list[tuple[int, str, int, int, float]]:
+    logger.info(f"Fetching civil war leaderboard from database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_stats_table(conn)
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT
+                    users.user_id,
+                    COALESCE(users.tg_username, users.name, CAST(users.user_id AS TEXT)) AS display_name,
+                    civil_war_stats.attempts,
+                    civil_war_stats.successes,
+                    CAST(civil_war_stats.successes AS REAL) / civil_war_stats.attempts AS winrate
+                FROM civil_war_stats
+                INNER JOIN users ON users.user_id = civil_war_stats.user_id
+                WHERE civil_war_stats.attempts > 0
+                ORDER BY winrate DESC, civil_war_stats.successes DESC, civil_war_stats.attempts DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+            return [
+                (int(row[0]), str(row[1]), int(row[2]), int(row[3]), float(row[4]))
+                for row in cursor.fetchall()
+            ]
+    except Exception as e:
+        logger.error(f"Error fetching civil war leaderboard from database at {db_path}: {str(e)}")
+        return []
+
+
+def get_command_last_used_at(db_path: str, command_name: str) -> datetime | None:
+    logger.info(f"Fetching cooldown for command={command_name} from database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_command_cooldowns_table(conn)
+            cursor = conn.cursor()
+            cursor.execute("SELECT last_used_at FROM command_cooldowns WHERE command_name = ?", (command_name,))
+            row = cursor.fetchone()
+            if row is None:
+                return None
+            return datetime.fromisoformat(row[0])
+    except Exception as e:
+        logger.error(f"Error fetching cooldown for command={command_name} from database at {db_path}: {str(e)}")
+        return None
+
+
+def upsert_command_last_used_at(db_path: str, command_name: str, last_used_at: datetime) -> None:
+    logger.info(f"Updating cooldown for command={command_name} in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_command_cooldowns_table(conn)
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO command_cooldowns (command_name, last_used_at)
+                VALUES (?, ?)
+                ON CONFLICT(command_name) DO UPDATE SET last_used_at = excluded.last_used_at
+                """,
+                (command_name, last_used_at.isoformat()),
+            )
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error updating cooldown for command={command_name} in database at {db_path}: {str(e)}")
 
 def reset_birthday_today_reminders(db_path: str) -> None:
     logger.info(f"Resetting birthday_today reminders in database at {db_path}")

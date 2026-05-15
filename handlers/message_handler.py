@@ -10,6 +10,7 @@ from telegram.ext import ContextTypes
 from db.database import get_db_users, update_username
 from handlers.birthday_reminders import process_birthday_reminders
 from handlers.civil_war import civil_war, civil_war_stats, is_civil_war_trigger, is_civil_war_stats_trigger
+from handlers.global_stats import register_stats_chat
 from handlers.quiz import QUIZ_TRANSITIONS, edit_user_data, process_quiz
 
 
@@ -19,6 +20,9 @@ logger = logging.getLogger(__name__)
 
 
 async def message_handler(update: Update, context: ContextTypes) -> None:
+    chat = update.effective_chat
+    register_stats_chat(context, chat.id if chat is not None else None)
+
     if is_civil_war_stats_trigger(update.effective_message.text if update.effective_message else None):
         await civil_war_stats(update, context)
         return

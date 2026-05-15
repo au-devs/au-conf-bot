@@ -24,7 +24,7 @@ telegram_ext_module.ContextTypes = DummyContextTypes
 sys.modules.setdefault('telegram', telegram_module)
 sys.modules.setdefault('telegram.ext', telegram_ext_module)
 
-from handlers.civil_war import _get_success_caption, _send_image, _send_text
+from handlers.civil_war import _get_success_caption, _send_image, _send_text, get_cooldown
 
 
 def build_update(thread_id: int = 42):
@@ -39,6 +39,18 @@ def build_context():
 
 
 class TestCivilWarThreading(unittest.IsolatedAsyncioTestCase):
+    def test_civil_war_cooldown_uses_env_or_default(self):
+        old_value = os.environ.pop('CIVIL_WAR_COOLDOWN_HOURS', None)
+        try:
+            self.assertEqual(get_cooldown().total_seconds(), 3600)
+            os.environ['CIVIL_WAR_COOLDOWN_HOURS'] = '2.5'
+            self.assertEqual(get_cooldown().total_seconds(), 9000)
+        finally:
+            if old_value is None:
+                os.environ.pop('CIVIL_WAR_COOLDOWN_HOURS', None)
+            else:
+                os.environ['CIVIL_WAR_COOLDOWN_HOURS'] = old_value
+
     def test_success_caption_uses_username_when_available(self):
         update = build_update()
 

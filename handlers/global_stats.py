@@ -7,12 +7,13 @@ from telegram.ext import ContextTypes
 
 from db.database import get_civil_war_leaderboard, get_civil_war_lowest_winrate, get_command_last_used_at, \
     upsert_command_last_used_at
+from handlers.admin_checker import is_admin
 
 
 logger = logging.getLogger(__name__)
 
 STATS_COMMAND = "stats"
-STATS_COOLDOWN = datetime.timedelta(hours=6)
+DEFAULT_STATS_COOLDOWN_HOURS = 3
 STATS_CHAT_IDS_KEY = "stats_chat_ids"
 BAYES_PRIOR_ATTEMPTS = 100
 BAYES_PRIOR_SUCCESS_RATE = 0.0666
@@ -21,6 +22,21 @@ PLACE_MARKERS = {
     2: "🥈",
     3: "🥉",
 }
+
+
+def get_env_float(name: str, default: float) -> float:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except ValueError:
+        logger.warning(f"Invalid {name}={value!r}, using default {default}")
+        return default
+
+
+def get_stats_cooldown() -> datetime.timedelta:
+    return datetime.timedelta(hours=get_env_float("STATS_COOLDOWN_HOURS", DEFAULT_STATS_COOLDOWN_HOURS))
 
 
 def register_stats_chat(context: ContextTypes.DEFAULT_TYPE, chat_id: int | None) -> None:
@@ -72,11 +88,23 @@ def format_global_stats_message(db_path: str) -> str:
 
 
 def get_remaining_cooldown_message(last_used_at: datetime.datetime, now: datetime.datetime) -> str:
-    remaining = STATS_COOLDOWN - (now - last_used_at)
+    cooldown = get_stats_cooldown()
+    remaining = cooldown - (now - last_used_at)
     remaining_seconds = max(int(remaining.total_seconds()), 0)
     minutes, seconds = divmod(remaining_seconds, 60)
     hours, minutes = divmod(minutes, 60)
-    return f"/stats можно запускать не чаще раза в 6 часов. Осталось: {hours:02d}:{minutes:02d}:{seconds:02d}"
+    cooldown_hours = get_env_float("STATS_COOLDOWN_HOURS", DEFAULT_STATS_COOLDOWN_HOURS)
+    return f"/stats можно запускать не чаще раза в {cooldown_hours:g} часов. Осталось: {hours:02d}:{minutes:02d}:{seconds:02d}"
+
+
+def is_bot_admin(user_id: int | None) -> bool:
+    if user_id is None:
+        return False
+    try:
+        return is_admin(user_id)
+    except Exception as e:
+        logger.warning(f"Failed to check bot admin status for user_id={user_id}: {e}")
+        return False
 
 
 async def is_chat_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
@@ -92,6 +120,13 @@ async def is_chat_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> b
     return chat_member.status in {"administrator", "creator"}
 
 
+async def can_bypass_stats_cooldown(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    user = update.effective_user
+    if is_bot_admin(getattr(user, "id", None)):
+        return True
+    return await is_chat_admin(update, context)
+
+
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message = update.effective_message
     chat = update.effective_chat
@@ -102,8 +137,9 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     db_path = os.getenv("DB_PATH")
     now = datetime.datetime.now()
     last_used_at = get_command_last_used_at(db_path, STATS_COMMAND)
-    bypass_cooldown = await is_chat_admin(update, context)
-    if not bypass_cooldown and last_used_at is not None and now - last_used_at < STATS_COOLDOWN:
+    bypass_cooldown = await can_bypass_stats_cooldown(update, context)
+    stats_cooldown = get_stats_cooldown()
+    if not bypass_cooldown and last_used_at is not None and now - last_used_at < stats_cooldown:
         await message.reply_text(get_remaining_cooldown_message(last_used_at, now))
         return
 

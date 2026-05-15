@@ -15,12 +15,27 @@ from handlers.admin_checker import is_admin
 
 logger = logging.getLogger(__name__)
 
-COOLDOWN = datetime.timedelta(hours=1)
+DEFAULT_COOLDOWN_HOURS = 1
 SUCCESS_CHANCE = 0.0666
 COMMAND_TEXT = "гражданская война"
 ADMIN_FORCE_COMMAND_TEXT = "/civil-war"
 STATS_COMMAND_TEXT = "/how-much-civil-war"
 DEFAULT_ASSETS_DIR = Path("/data/assets")
+
+
+def get_env_float(name: str, default: float) -> float:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except ValueError:
+        logger.warning(f"Invalid {name}={value!r}, using default {default}")
+        return default
+
+
+def get_cooldown() -> datetime.timedelta:
+    return datetime.timedelta(hours=get_env_float("CIVIL_WAR_COOLDOWN_HOURS", DEFAULT_COOLDOWN_HOURS))
 
 
 def get_assets_dir() -> Path:
@@ -69,11 +84,16 @@ def should_force_success(text: str | None, user_id: int) -> bool:
 
 
 def _get_remaining_cooldown_message(last_used_at: datetime.datetime, now: datetime.datetime) -> str:
-    remaining = COOLDOWN - (now - last_used_at)
+    cooldown = get_cooldown()
+    remaining = cooldown - (now - last_used_at)
     remaining_seconds = max(int(remaining.total_seconds()), 0)
     minutes, seconds = divmod(remaining_seconds, 60)
     hours, minutes = divmod(minutes, 60)
-    return f"Гражданскую войну можно запускать не чаще раза в час. Осталось: {hours:02d}:{minutes:02d}:{seconds:02d}"
+    cooldown_hours = get_env_float("CIVIL_WAR_COOLDOWN_HOURS", DEFAULT_COOLDOWN_HOURS)
+    return (
+        f"Гражданскую войну можно запускать не чаще раза в {cooldown_hours:g} часов. "
+        f"Осталось: {hours:02d}:{minutes:02d}:{seconds:02d}"
+    )
 
 
 def _get_thread_kwargs(update: Update) -> dict:
@@ -150,7 +170,8 @@ async def civil_war(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     now = datetime.datetime.now()
     db_path = os.getenv("DB_PATH")
     last_used_at = get_civil_war_last_used_at(db_path, user.id)
-    if last_used_at is not None and now - last_used_at < COOLDOWN:
+    cooldown = get_cooldown()
+    if last_used_at is not None and now - last_used_at < cooldown:
         await _send_text(context.bot, update, _get_remaining_cooldown_message(last_used_at, now))
         return
 

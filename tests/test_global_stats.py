@@ -2,6 +2,7 @@ import sys
 import types
 import unittest
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 import db.database as db
 from models.user_manager import create_user
@@ -23,10 +24,10 @@ telegram_ext_module.ContextTypes = DummyContextTypes
 sys.modules.setdefault('telegram', telegram_module)
 sys.modules.setdefault('telegram.ext', telegram_ext_module)
 
-from handlers.global_stats import format_global_stats_message, register_stats_chat
+from handlers.global_stats import can_bypass_stats_cooldown, format_global_stats_message, get_stats_cooldown, register_stats_chat
 
 
-class TestGlobalStats(unittest.TestCase):
+class TestGlobalStats(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.db_path = 'users_test.sqlite'
         db.create_database(self.db_path)
@@ -41,6 +42,25 @@ class TestGlobalStats(unittest.TestCase):
         register_stats_chat(context, 123)
 
         self.assertEqual(context.bot_data['stats_chat_ids'], {123})
+
+    def test_stats_cooldown_uses_env_or_default(self):
+        with patch('handlers.global_stats.os.getenv', return_value=None):
+            self.assertEqual(get_stats_cooldown().total_seconds(), 10800)
+        with patch('handlers.global_stats.os.getenv', return_value='4.5'):
+            self.assertEqual(get_stats_cooldown().total_seconds(), 16200)
+
+    async def test_bot_admin_bypasses_stats_cooldown(self):
+        update = SimpleNamespace(
+            effective_chat=SimpleNamespace(id=456, type='group'),
+            effective_user=SimpleNamespace(id=123),
+        )
+        context = SimpleNamespace(bot=SimpleNamespace(get_chat_member=AsyncMock()))
+
+        with patch('handlers.global_stats.is_admin', return_value=True):
+            result = await can_bypass_stats_cooldown(update, context)
+
+        self.assertTrue(result)
+        context.bot.get_chat_member.assert_not_awaited()
 
     def test_format_global_stats_message(self):
         test_user = create_user({'user_id': 1, 'name': 'Test User', 'tg_username': '@test_user', 'birthday': '01.01.2000',

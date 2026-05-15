@@ -393,35 +393,36 @@ def get_civil_war_stats(db_path: str, user_id: int) -> tuple[int, int]:
 
 def get_civil_war_leaderboard(
         db_path: str,
-        limit: int = 10,
-        attempts_delta_from_leader: int = 100,
-) -> list[tuple[int, str, int, int, float]]:
+        limit: int | None = None,
+        prior_attempts: int = 100,
+        prior_success_rate: float = 0.0666,
+) -> list[tuple[int, str, int, int, float, float]]:
     logger.info(f"Fetching civil war leaderboard from database at {db_path}")
     try:
         with sqlite3.connect(db_path) as conn:
             ensure_civil_war_stats_table(conn)
             cursor = conn.cursor()
-            cursor.execute(
-                """
+            query = """
                 SELECT
                     users.user_id,
                     COALESCE(users.tg_username, users.name, CAST(users.user_id AS TEXT)) AS display_name,
                     civil_war_stats.attempts,
                     civil_war_stats.successes,
-                    CAST(civil_war_stats.successes AS REAL) / civil_war_stats.attempts AS winrate
+                    CAST(civil_war_stats.successes AS REAL) / civil_war_stats.attempts AS winrate,
+                    (civil_war_stats.successes + ?) / (civil_war_stats.attempts + ?) AS adjusted_winrate
                 FROM civil_war_stats
                 INNER JOIN users ON users.user_id = civil_war_stats.user_id
                 WHERE civil_war_stats.attempts > 0
-                    AND civil_war_stats.attempts >= (
-                        SELECT MAX(attempts) FROM civil_war_stats WHERE attempts > 0
-                    ) - ?
-                ORDER BY winrate DESC, civil_war_stats.successes DESC, civil_war_stats.attempts DESC
-                LIMIT ?
-                """,
-                (attempts_delta_from_leader, limit),
-            )
+                ORDER BY adjusted_winrate DESC, winrate DESC, civil_war_stats.successes DESC, civil_war_stats.attempts DESC
+                """
+            prior_successes = prior_attempts * prior_success_rate
+            params = (prior_successes, prior_attempts)
+            if limit is not None:
+                query += " LIMIT ?"
+                params = (prior_successes, prior_attempts, limit)
+            cursor.execute(query, params)
             return [
-                (int(row[0]), str(row[1]), int(row[2]), int(row[3]), float(row[4]))
+                (int(row[0]), str(row[1]), int(row[2]), int(row[3]), float(row[4]), float(row[5]))
                 for row in cursor.fetchall()
             ]
     except Exception as e:
@@ -431,8 +432,9 @@ def get_civil_war_leaderboard(
 
 def get_civil_war_lowest_winrate(
         db_path: str,
-        attempts_delta_from_leader: int = 100,
-) -> tuple[int, str, int, int, float] | None:
+        prior_attempts: int = 100,
+        prior_success_rate: float = 0.0666,
+) -> tuple[int, str, int, int, float, float] | None:
     logger.info(f"Fetching lowest civil war winrate from database at {db_path}")
     try:
         with sqlite3.connect(db_path) as conn:
@@ -445,22 +447,20 @@ def get_civil_war_lowest_winrate(
                     COALESCE(users.tg_username, users.name, CAST(users.user_id AS TEXT)) AS display_name,
                     civil_war_stats.attempts,
                     civil_war_stats.successes,
-                    CAST(civil_war_stats.successes AS REAL) / civil_war_stats.attempts AS winrate
+                    CAST(civil_war_stats.successes AS REAL) / civil_war_stats.attempts AS winrate,
+                    (civil_war_stats.successes + ?) / (civil_war_stats.attempts + ?) AS adjusted_winrate
                 FROM civil_war_stats
                 INNER JOIN users ON users.user_id = civil_war_stats.user_id
                 WHERE civil_war_stats.attempts > 0
-                    AND civil_war_stats.attempts >= (
-                        SELECT MAX(attempts) FROM civil_war_stats WHERE attempts > 0
-                    ) - ?
-                ORDER BY winrate ASC, civil_war_stats.successes ASC, civil_war_stats.attempts DESC
+                ORDER BY adjusted_winrate ASC, winrate ASC, civil_war_stats.successes ASC, civil_war_stats.attempts DESC
                 LIMIT 1
                 """,
-                (attempts_delta_from_leader,),
+                (prior_attempts * prior_success_rate, prior_attempts),
             )
             row = cursor.fetchone()
             if row is None:
                 return None
-            return int(row[0]), str(row[1]), int(row[2]), int(row[3]), float(row[4])
+            return int(row[0]), str(row[1]), int(row[2]), int(row[3]), float(row[4]), float(row[5])
     except Exception as e:
         logger.error(f"Error fetching lowest civil war winrate from database at {db_path}: {str(e)}")
         return None

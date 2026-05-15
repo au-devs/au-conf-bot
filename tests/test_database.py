@@ -82,7 +82,7 @@ class TestDatabase(unittest.TestCase):
         self.assertEqual(leaderboard[0][3], 1)
         self.assertEqual(leaderboard[1][0], 1)
 
-    def test_civil_war_leaderboard_ignores_low_sample_outliers(self):
+    def test_civil_war_leaderboard_includes_low_sample_users(self):
         leader = create_user({'user_id': 1, 'name': 'Leader', 'tg_username': '@leader', 'birthday': '01.01.2000',
                               'wishlist_url': 'https://example1.com', 'money_gifts': True, 'funny_gifts': True})
         contender = create_user({'user_id': 2, 'name': 'Contender', 'tg_username': '@contender', 'birthday': '01.01.2000',
@@ -104,7 +104,7 @@ class TestDatabase(unittest.TestCase):
 
         leaderboard = db.get_civil_war_leaderboard(self.db_path)
 
-        self.assertEqual([row[0] for row in leaderboard], [1, 2])
+        self.assertEqual([row[0] for row in leaderboard], [1, 2, 3])
 
     def test_civil_war_lowest_winrate(self):
         test_user = create_user({'user_id': 1, 'name': 'Test User', 'tg_username': '@test_user', 'birthday': '01.01.2000',
@@ -123,7 +123,7 @@ class TestDatabase(unittest.TestCase):
         self.assertEqual(lowest_winrate[2], 1)
         self.assertEqual(lowest_winrate[3], 0)
 
-    def test_civil_war_lowest_winrate_ignores_low_sample_outliers(self):
+    def test_civil_war_lowest_winrate_includes_low_sample_users(self):
         leader = create_user({'user_id': 1, 'name': 'Leader', 'tg_username': '@leader', 'birthday': '01.01.2000',
                               'wishlist_url': 'https://example1.com', 'money_gifts': True, 'funny_gifts': True})
         contender = create_user({'user_id': 2, 'name': 'Contender', 'tg_username': '@contender', 'birthday': '01.01.2000',
@@ -135,6 +135,7 @@ class TestDatabase(unittest.TestCase):
         db.add_user(self.db_path, outlier)
         for _ in range(200):
             db.update_civil_war_stats(self.db_path, 1, True)
+        db.update_civil_war_stats(self.db_path, 2, True)
         for _ in range(100):
             db.update_civil_war_stats(self.db_path, 2, False)
         for _ in range(2):

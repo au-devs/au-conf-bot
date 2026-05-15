@@ -14,7 +14,8 @@ logger = logging.getLogger(__name__)
 STATS_COMMAND = "stats"
 STATS_COOLDOWN = datetime.timedelta(hours=6)
 STATS_CHAT_IDS_KEY = "stats_chat_ids"
-ATTEMPTS_DELTA_FROM_LEADER = 100
+BAYES_PRIOR_ATTEMPTS = 100
+BAYES_PRIOR_SUCCESS_RATE = 0.0666
 PLACE_MARKERS = {
     1: "🥇",
     2: "🥈",
@@ -32,8 +33,8 @@ def register_stats_chat(context: ContextTypes.DEFAULT_TYPE, chat_id: int | None)
 def format_global_stats_message(db_path: str) -> str:
     leaderboard = get_civil_war_leaderboard(
         db_path,
-        limit=10,
-        attempts_delta_from_leader=ATTEMPTS_DELTA_FROM_LEADER,
+        prior_attempts=BAYES_PRIOR_ATTEMPTS,
+        prior_success_rate=BAYES_PRIOR_SUCCESS_RATE,
     )
     if not leaderboard:
         return "📉 Статистики гражданской войны пока нет."
@@ -42,26 +43,29 @@ def format_global_stats_message(db_path: str) -> str:
     total_successes = sum(row[3] for row in leaderboard)
     total_winrate = 0 if total_attempts == 0 else (total_successes / total_attempts) * 100
     lines = [
-        "🏆 Топ-10 гражданской войны",
-        f"📊 Общий винрейт топа: {total_winrate:.2f}% ({total_successes}/{total_attempts})",
+        "🏆 Рейтинг гражданской войны",
+        f"📊 Общий винрейт: {total_winrate:.2f}% ({total_successes}/{total_attempts})",
         "",
     ]
-    for place, (_, display_name, attempts, successes, winrate) in enumerate(leaderboard, start=1):
+    for place, (_, display_name, attempts, successes, winrate, adjusted_winrate) in enumerate(leaderboard, start=1):
         failures = attempts - successes
         place_marker = PLACE_MARKERS.get(place, f"{place}.")
         lines.append(
-            f"{place_marker} {display_name}: {winrate * 100:.2f}% | "
+            f"{place_marker} {display_name}: {winrate * 100:.2f}% "
+            f"(рейтинг {adjusted_winrate * 100:.2f}%) | "
             f"🔥 {successes} / 🎲 {attempts} / 💀 {failures}"
         )
     lowest_winrate = get_civil_war_lowest_winrate(
         db_path,
-        attempts_delta_from_leader=ATTEMPTS_DELTA_FROM_LEADER,
+        prior_attempts=BAYES_PRIOR_ATTEMPTS,
+        prior_success_rate=BAYES_PRIOR_SUCCESS_RATE,
     )
     if lowest_winrate is not None:
-        _, display_name, attempts, successes, winrate = lowest_winrate
+        _, display_name, attempts, successes, winrate, adjusted_winrate = lowest_winrate
         lines.extend([
             "",
-            f"🫡 {display_name}: самый низкий винрейт {winrate * 100:.2f}% ({successes}/{attempts}). "
+            f"🫡 {display_name}: худший рейтинг {adjusted_winrate * 100:.2f}% "
+            f"при винрейте {winrate * 100:.2f}% ({successes}/{attempts}). "
             "Бро, тебе надо тренироваться",
         ])
     return "\n".join(lines)
@@ -75,6 +79,19 @@ def get_remaining_cooldown_message(last_used_at: datetime.datetime, now: datetim
     return f"/stats можно запускать не чаще раза в 6 часов. Осталось: {hours:02d}:{minutes:02d}:{seconds:02d}"
 
 
+async def is_chat_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    chat = update.effective_chat
+    user = update.effective_user
+    if chat is None or user is None or getattr(chat, "type", None) == "private":
+        return False
+    try:
+        chat_member = await context.bot.get_chat_member(chat_id=chat.id, user_id=user.id)
+    except Exception as e:
+        logger.warning(f"Failed to check chat admin status for user_id={user.id} in chat_id={chat.id}: {e}")
+        return False
+    return chat_member.status in {"administrator", "creator"}
+
+
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message = update.effective_message
     chat = update.effective_chat
@@ -85,11 +102,13 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     db_path = os.getenv("DB_PATH")
     now = datetime.datetime.now()
     last_used_at = get_command_last_used_at(db_path, STATS_COMMAND)
-    if last_used_at is not None and now - last_used_at < STATS_COOLDOWN:
+    bypass_cooldown = await is_chat_admin(update, context)
+    if not bypass_cooldown and last_used_at is not None and now - last_used_at < STATS_COOLDOWN:
         await message.reply_text(get_remaining_cooldown_message(last_used_at, now))
         return
 
-    upsert_command_last_used_at(db_path, STATS_COMMAND, now)
+    if not bypass_cooldown:
+        upsert_command_last_used_at(db_path, STATS_COMMAND, now)
     await message.reply_text(format_global_stats_message(db_path))
 
 

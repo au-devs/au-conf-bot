@@ -55,14 +55,15 @@ class TestGlobalStats(unittest.TestCase):
 
         message = format_global_stats_message(self.db_path)
 
-        self.assertIn('🏆 Топ-10 гражданской войны', message)
+        self.assertIn('🏆 Рейтинг гражданской войны', message)
         self.assertIn('🥇', message)
         self.assertIn('@test_user', message)
         self.assertIn('50.00%', message)
+        self.assertIn('рейтинг', message)
         self.assertIn('@test_user2', message)
         self.assertIn('Бро, тебе надо тренироваться', message)
 
-    def test_format_global_stats_message_ignores_low_sample_outliers(self):
+    def test_format_global_stats_message_includes_low_sample_users(self):
         test_user = create_user({'user_id': 1, 'name': 'Test User', 'tg_username': '@test_user', 'birthday': '01.01.2000',
                                  'wishlist_url': 'https://example1.com', 'money_gifts': True, 'funny_gifts': True})
         outlier = create_user({'user_id': 2, 'name': 'Outlier', 'tg_username': '@outlier', 'birthday': '01.01.2000',
@@ -77,7 +78,8 @@ class TestGlobalStats(unittest.TestCase):
         message = format_global_stats_message(self.db_path)
 
         self.assertIn('@test_user', message)
-        self.assertNotIn('@outlier', message)
+        self.assertIn('@outlier', message)
+        self.assertLess(message.index('@test_user'), message.index('@outlier'))
 
 
 if __name__ == '__main__':

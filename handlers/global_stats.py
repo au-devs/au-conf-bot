@@ -133,6 +133,20 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await message.reply_text(format_global_stats_message(db_path))
 
 
+async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.effective_message
+    chat = update.effective_chat
+    user = update.effective_user
+    if message is None:
+        return
+    if not is_bot_admin(getattr(user, "id", None)):
+        logger.info(f"Non-admin user_id={getattr(user, 'id', None)} tried to run /admin_stats")
+        return
+
+    register_stats_chat(context, chat.id if chat is not None else None)
+    await message.reply_text(format_global_stats_message(os.getenv("DB_PATH")))
+
+
 async def send_daily_stats(context: ContextTypes.DEFAULT_TYPE) -> None:
     db_path = os.getenv("DB_PATH")
     message = format_global_stats_message(db_path)

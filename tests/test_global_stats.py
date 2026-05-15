@@ -2,7 +2,7 @@ import sys
 import types
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import db.database as db
 from models.user_manager import create_user
@@ -24,7 +24,8 @@ telegram_ext_module.ContextTypes = DummyContextTypes
 sys.modules.setdefault('telegram', telegram_module)
 sys.modules.setdefault('telegram.ext', telegram_ext_module)
 
-from handlers.global_stats import can_bypass_stats_cooldown, format_global_stats_message, get_stats_cooldown, register_stats_chat
+from handlers.global_stats import admin_stats, can_bypass_stats_cooldown, format_global_stats_message, get_stats_cooldown, \
+    register_stats_chat
 
 
 class TestGlobalStats(unittest.IsolatedAsyncioTestCase):
@@ -72,6 +73,39 @@ class TestGlobalStats(unittest.IsolatedAsyncioTestCase):
             result = await can_bypass_stats_cooldown(update, context)
 
         self.assertFalse(result)
+
+    async def test_admin_stats_does_not_touch_cooldown(self):
+        message = SimpleNamespace(reply_text=AsyncMock())
+        update = SimpleNamespace(
+            effective_message=message,
+            effective_chat=SimpleNamespace(id=456),
+            effective_user=SimpleNamespace(id=123),
+        )
+        context = SimpleNamespace(bot_data={})
+
+        with patch('handlers.global_stats.is_admin', return_value=True), \
+                patch('handlers.global_stats.os.getenv', return_value=self.db_path), \
+                patch('handlers.global_stats.get_command_last_used_at') as get_last_used, \
+                patch('handlers.global_stats.upsert_command_last_used_at') as upsert_last_used:
+            await admin_stats(update, context)
+
+        get_last_used.assert_not_called()
+        upsert_last_used.assert_not_called()
+        message.reply_text.assert_awaited_once()
+
+    async def test_non_admin_stats_does_not_reply(self):
+        message = SimpleNamespace(reply_text=AsyncMock())
+        update = SimpleNamespace(
+            effective_message=message,
+            effective_chat=SimpleNamespace(id=456),
+            effective_user=SimpleNamespace(id=123),
+        )
+        context = SimpleNamespace(bot_data={})
+
+        with patch('handlers.global_stats.is_admin', return_value=False):
+            await admin_stats(update, context)
+
+        message.reply_text.assert_not_awaited()
 
     def test_format_global_stats_message(self):
         test_user = create_user({'user_id': 1, 'name': 'Test User', 'tg_username': '@test_user', 'birthday': '01.01.2000',

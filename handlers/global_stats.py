@@ -5,7 +5,8 @@ import os
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from db.database import get_civil_war_leaderboard, get_command_last_used_at, upsert_command_last_used_at
+from db.database import get_civil_war_leaderboard, get_civil_war_lowest_winrate, get_command_last_used_at, \
+    upsert_command_last_used_at
 
 
 logger = logging.getLogger(__name__)
@@ -13,6 +14,7 @@ logger = logging.getLogger(__name__)
 STATS_COMMAND = "stats"
 STATS_COOLDOWN = datetime.timedelta(hours=6)
 STATS_CHAT_IDS_KEY = "stats_chat_ids"
+ATTEMPTS_DELTA_FROM_LEADER = 100
 PLACE_MARKERS = {
     1: "🥇",
     2: "🥈",
@@ -28,7 +30,11 @@ def register_stats_chat(context: ContextTypes.DEFAULT_TYPE, chat_id: int | None)
 
 
 def format_global_stats_message(db_path: str) -> str:
-    leaderboard = get_civil_war_leaderboard(db_path, limit=10)
+    leaderboard = get_civil_war_leaderboard(
+        db_path,
+        limit=10,
+        attempts_delta_from_leader=ATTEMPTS_DELTA_FROM_LEADER,
+    )
     if not leaderboard:
         return "📉 Статистики гражданской войны пока нет."
 
@@ -47,6 +53,17 @@ def format_global_stats_message(db_path: str) -> str:
             f"{place_marker} {display_name}: {winrate * 100:.2f}% | "
             f"🔥 {successes} / 🎲 {attempts} / 💀 {failures}"
         )
+    lowest_winrate = get_civil_war_lowest_winrate(
+        db_path,
+        attempts_delta_from_leader=ATTEMPTS_DELTA_FROM_LEADER,
+    )
+    if lowest_winrate is not None:
+        _, display_name, attempts, successes, winrate = lowest_winrate
+        lines.extend([
+            "",
+            f"🫡 {display_name}: самый низкий винрейт {winrate * 100:.2f}% ({successes}/{attempts}). "
+            "Бро, тебе надо тренироваться",
+        ])
     return "\n".join(lines)
 
 

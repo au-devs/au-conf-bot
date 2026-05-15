@@ -82,6 +82,68 @@ class TestDatabase(unittest.TestCase):
         self.assertEqual(leaderboard[0][3], 1)
         self.assertEqual(leaderboard[1][0], 1)
 
+    def test_civil_war_leaderboard_ignores_low_sample_outliers(self):
+        leader = create_user({'user_id': 1, 'name': 'Leader', 'tg_username': '@leader', 'birthday': '01.01.2000',
+                              'wishlist_url': 'https://example1.com', 'money_gifts': True, 'funny_gifts': True})
+        contender = create_user({'user_id': 2, 'name': 'Contender', 'tg_username': '@contender', 'birthday': '01.01.2000',
+                                 'wishlist_url': 'https://example2.com', 'money_gifts': False, 'funny_gifts': True})
+        outlier = create_user({'user_id': 3, 'name': 'Outlier', 'tg_username': '@outlier', 'birthday': '01.01.2000',
+                               'wishlist_url': 'https://example3.com', 'money_gifts': False, 'funny_gifts': False})
+        db.add_user(self.db_path, leader)
+        db.add_user(self.db_path, contender)
+        db.add_user(self.db_path, outlier)
+        for _ in range(150):
+            db.update_civil_war_stats(self.db_path, 1, True)
+        for _ in range(50):
+            db.update_civil_war_stats(self.db_path, 1, False)
+        for _ in range(75):
+            db.update_civil_war_stats(self.db_path, 2, True)
+            db.update_civil_war_stats(self.db_path, 2, False)
+        for _ in range(2):
+            db.update_civil_war_stats(self.db_path, 3, True)
+
+        leaderboard = db.get_civil_war_leaderboard(self.db_path)
+
+        self.assertEqual([row[0] for row in leaderboard], [1, 2])
+
+    def test_civil_war_lowest_winrate(self):
+        test_user = create_user({'user_id': 1, 'name': 'Test User', 'tg_username': '@test_user', 'birthday': '01.01.2000',
+                                 'wishlist_url': 'https://example1.com', 'money_gifts': True, 'funny_gifts': True})
+        test_user2 = create_user({'user_id': 2, 'name': 'Test User2', 'tg_username': '@test_user2', 'birthday': '01.01.2000',
+                                  'wishlist_url': 'https://example2.com', 'money_gifts': False, 'funny_gifts': True})
+        db.add_user(self.db_path, test_user)
+        db.add_user(self.db_path, test_user2)
+        db.update_civil_war_stats(self.db_path, 1, True)
+        db.update_civil_war_stats(self.db_path, 2, False)
+
+        lowest_winrate = db.get_civil_war_lowest_winrate(self.db_path)
+
+        self.assertEqual(lowest_winrate[0], 2)
+        self.assertEqual(lowest_winrate[1], '@test_user2')
+        self.assertEqual(lowest_winrate[2], 1)
+        self.assertEqual(lowest_winrate[3], 0)
+
+    def test_civil_war_lowest_winrate_ignores_low_sample_outliers(self):
+        leader = create_user({'user_id': 1, 'name': 'Leader', 'tg_username': '@leader', 'birthday': '01.01.2000',
+                              'wishlist_url': 'https://example1.com', 'money_gifts': True, 'funny_gifts': True})
+        contender = create_user({'user_id': 2, 'name': 'Contender', 'tg_username': '@contender', 'birthday': '01.01.2000',
+                                 'wishlist_url': 'https://example2.com', 'money_gifts': False, 'funny_gifts': True})
+        outlier = create_user({'user_id': 3, 'name': 'Outlier', 'tg_username': '@outlier', 'birthday': '01.01.2000',
+                               'wishlist_url': 'https://example3.com', 'money_gifts': False, 'funny_gifts': False})
+        db.add_user(self.db_path, leader)
+        db.add_user(self.db_path, contender)
+        db.add_user(self.db_path, outlier)
+        for _ in range(200):
+            db.update_civil_war_stats(self.db_path, 1, True)
+        for _ in range(100):
+            db.update_civil_war_stats(self.db_path, 2, False)
+        for _ in range(2):
+            db.update_civil_war_stats(self.db_path, 3, False)
+
+        lowest_winrate = db.get_civil_war_lowest_winrate(self.db_path)
+
+        self.assertEqual(lowest_winrate[0], 2)
+
     def test_command_cooldown_persistence(self):
         last_used_at = datetime(2026, 5, 15, 12, 0, 0)
         db.upsert_command_last_used_at(self.db_path, 'stats', last_used_at)

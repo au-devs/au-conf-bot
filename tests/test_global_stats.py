@@ -2,7 +2,7 @@ import sys
 import types
 import unittest
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import db.database as db
 from models.user_manager import create_user
@@ -54,13 +54,24 @@ class TestGlobalStats(unittest.IsolatedAsyncioTestCase):
             effective_chat=SimpleNamespace(id=456, type='group'),
             effective_user=SimpleNamespace(id=123),
         )
-        context = SimpleNamespace(bot=SimpleNamespace(get_chat_member=AsyncMock()))
+        context = SimpleNamespace()
 
         with patch('handlers.global_stats.is_admin', return_value=True):
             result = await can_bypass_stats_cooldown(update, context)
 
         self.assertTrue(result)
-        context.bot.get_chat_member.assert_not_awaited()
+
+    async def test_chat_admin_does_not_bypass_stats_cooldown(self):
+        update = SimpleNamespace(
+            effective_chat=SimpleNamespace(id=456, type='group'),
+            effective_user=SimpleNamespace(id=123),
+        )
+        context = SimpleNamespace()
+
+        with patch('handlers.global_stats.is_admin', return_value=False):
+            result = await can_bypass_stats_cooldown(update, context)
+
+        self.assertFalse(result)
 
     def test_format_global_stats_message(self):
         test_user = create_user({'user_id': 1, 'name': 'Test User', 'tg_username': '@test_user', 'birthday': '01.01.2000',

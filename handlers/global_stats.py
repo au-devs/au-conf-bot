@@ -107,24 +107,9 @@ def is_bot_admin(user_id: int | None) -> bool:
         return False
 
 
-async def is_chat_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    chat = update.effective_chat
-    user = update.effective_user
-    if chat is None or user is None or getattr(chat, "type", None) == "private":
-        return False
-    try:
-        chat_member = await context.bot.get_chat_member(chat_id=chat.id, user_id=user.id)
-    except Exception as e:
-        logger.warning(f"Failed to check chat admin status for user_id={user.id} in chat_id={chat.id}: {e}")
-        return False
-    return chat_member.status in {"administrator", "creator"}
-
-
 async def can_bypass_stats_cooldown(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     user = update.effective_user
-    if is_bot_admin(getattr(user, "id", None)):
-        return True
-    return await is_chat_admin(update, context)
+    return is_bot_admin(getattr(user, "id", None))
 
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

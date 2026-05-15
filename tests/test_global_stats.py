@@ -93,6 +93,32 @@ class TestGlobalStats(unittest.IsolatedAsyncioTestCase):
         upsert_last_used.assert_not_called()
         message.reply_text.assert_awaited_once()
 
+    async def test_admin_stats_fetches_missing_usernames_and_creates_users(self):
+        db.update_civil_war_stats(self.db_path, 12345, True)
+        message = SimpleNamespace(reply_text=AsyncMock())
+        update = SimpleNamespace(
+            effective_message=message,
+            effective_chat=SimpleNamespace(id=456, type='group'),
+            effective_user=SimpleNamespace(id=1),
+        )
+        context = SimpleNamespace(
+            bot_data={},
+            bot=SimpleNamespace(
+                get_chat_member=AsyncMock(
+                    return_value=SimpleNamespace(user=SimpleNamespace(username='missing_user', full_name='Missing User'))
+                )
+            ),
+        )
+
+        with patch('handlers.global_stats.is_admin', return_value=True), \
+                patch('handlers.global_stats.os.getenv', return_value=self.db_path):
+            await admin_stats(update, context)
+
+        context.bot.get_chat_member.assert_awaited_once_with(chat_id=456, user_id=12345)
+        user = db.get_user(self.db_path, 12345)
+        self.assertEqual(user[2], '@missing_user')
+        message.reply_text.assert_awaited_once()
+
     async def test_non_admin_stats_does_not_reply(self):
         message = SimpleNamespace(reply_text=AsyncMock())
         update = SimpleNamespace(

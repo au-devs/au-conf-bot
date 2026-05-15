@@ -10,6 +10,8 @@ import models.user as User
 logger = logging.getLogger(__name__)
 script_dir = os.path.dirname(os.path.abspath(__file__))
 ALLOWED_USER_FIELDS = {'name', 'birthday', 'wishlist_url', 'money_gifts', 'funny_gifts', 'tg_username'}
+PLACEHOLDER_USER_NAME = '-'
+PLACEHOLDER_USER_WISHLIST = 'я не заполнял профиль'
 
 
 def ensure_civil_war_cooldowns_table(conn: sqlite3.Connection) -> None:
@@ -30,11 +32,16 @@ def ensure_civil_war_stats_table(conn: sqlite3.Connection) -> None:
         """
         CREATE TABLE IF NOT EXISTS civil_war_stats (
             user_id INTEGER NOT NULL PRIMARY KEY,
+            display_name VARCHAR(255) NULL,
             attempts INTEGER NOT NULL DEFAULT 0,
             successes INTEGER NOT NULL DEFAULT 0
         )
         """
     )
+    cursor.execute("PRAGMA table_info(civil_war_stats)")
+    columns = {row[1] for row in cursor.fetchall()}
+    if 'display_name' not in columns:
+        cursor.execute("ALTER TABLE civil_war_stats ADD COLUMN display_name VARCHAR(255) NULL")
 
 
 def ensure_command_cooldowns_table(conn: sqlite3.Connection) -> None:
@@ -354,7 +361,7 @@ def upsert_civil_war_last_used_at(db_path: str, user_id: int, last_used_at: date
         logger.error(f"Error updating civil war cooldown for user_id={user_id} in database at {db_path}: {str(e)}")
 
 
-def update_civil_war_stats(db_path: str, user_id: int, is_success: bool) -> None:
+def update_civil_war_stats(db_path: str, user_id: int, is_success: bool, display_name: str | None = None) -> None:
     logger.info(f"Updating civil war stats for user_id={user_id} in database at {db_path}")
     try:
         with sqlite3.connect(db_path) as conn:
@@ -362,17 +369,89 @@ def update_civil_war_stats(db_path: str, user_id: int, is_success: bool) -> None
             cursor = conn.cursor()
             cursor.execute(
                 """
-                INSERT INTO civil_war_stats (user_id, attempts, successes)
-                VALUES (?, 1, ?)
+                INSERT INTO civil_war_stats (user_id, display_name, attempts, successes)
+                VALUES (?, ?, 1, ?)
                 ON CONFLICT(user_id) DO UPDATE SET
+                    display_name = COALESCE(excluded.display_name, display_name),
                     attempts = attempts + 1,
                     successes = successes + excluded.successes
                 """,
-                (user_id, 1 if is_success else 0),
+                (user_id, display_name, 1 if is_success else 0),
             )
             conn.commit()
     except Exception as e:
         logger.error(f"Error updating civil war stats for user_id={user_id} in database at {db_path}: {str(e)}")
+
+
+def get_civil_war_stats_without_display_names(db_path: str) -> list[int]:
+    logger.info(f"Fetching civil war stats rows without display_name from database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_stats_table(conn)
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT user_id
+                FROM civil_war_stats
+                WHERE attempts > 0 AND (display_name IS NULL OR display_name = '')
+                """
+            )
+            return [int(row[0]) for row in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"Error fetching civil war stats without display_name from database at {db_path}: {str(e)}")
+        return []
+
+
+def update_civil_war_display_name(db_path: str, user_id: int, display_name: str) -> None:
+    logger.info(f"Updating civil war display_name for user_id={user_id} in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_stats_table(conn)
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE civil_war_stats SET display_name = ? WHERE user_id = ?",
+                (display_name, user_id),
+            )
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error updating civil war display_name for user_id={user_id} in database at {db_path}: {str(e)}")
+
+
+def create_missing_users_from_civil_war_stats(db_path: str) -> None:
+    logger.info(f"Creating missing users from civil war stats in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_stats_table(conn)
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO users (user_id, name, tg_username, birthday, wishlist_url, money_gifts, funny_gifts)
+                SELECT
+                    civil_war_stats.user_id,
+                    ?,
+                    COALESCE(civil_war_stats.display_name, ?),
+                    NULL,
+                    ?,
+                    0,
+                    0
+                FROM civil_war_stats
+                LEFT JOIN users ON users.user_id = civil_war_stats.user_id
+                WHERE civil_war_stats.attempts > 0 AND users.user_id IS NULL
+                """,
+                (PLACEHOLDER_USER_NAME, PLACEHOLDER_USER_NAME, PLACEHOLDER_USER_WISHLIST),
+            )
+            cursor.execute(
+                """
+                INSERT INTO reminders (user_id, reminder_14_days, reminder_7_days, reminder_1_days, birthday_today)
+                SELECT users.user_id, 0, 0, 0, 0
+                FROM users
+                LEFT JOIN reminders ON reminders.user_id = users.user_id
+                WHERE reminders.user_id IS NULL
+                """
+            )
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error creating missing users from civil war stats in database at {db_path}: {str(e)}")
 
 
 def get_civil_war_stats(db_path: str, user_id: int) -> tuple[int, int]:
@@ -405,7 +484,7 @@ def get_civil_war_leaderboard(
             query = """
                 SELECT
                     civil_war_stats.user_id,
-                    COALESCE(users.tg_username, users.name, CAST(civil_war_stats.user_id AS TEXT)) AS display_name,
+                    COALESCE(users.tg_username, civil_war_stats.display_name, users.name, CAST(civil_war_stats.user_id AS TEXT)) AS display_name,
                     civil_war_stats.attempts,
                     civil_war_stats.successes,
                     CAST(civil_war_stats.successes AS REAL) / civil_war_stats.attempts AS winrate,
@@ -444,7 +523,7 @@ def get_civil_war_lowest_winrate(
                 """
                 SELECT
                     civil_war_stats.user_id,
-                    COALESCE(users.tg_username, users.name, CAST(civil_war_stats.user_id AS TEXT)) AS display_name,
+                    COALESCE(users.tg_username, civil_war_stats.display_name, users.name, CAST(civil_war_stats.user_id AS TEXT)) AS display_name,
                     civil_war_stats.attempts,
                     civil_war_stats.successes,
                     CAST(civil_war_stats.successes AS REAL) / civil_war_stats.attempts AS winrate,

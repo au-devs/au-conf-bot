@@ -118,6 +118,13 @@ def _get_success_caption(user) -> tuple[str, str | None]:
     return f'<a href="tg://user?id={user_id}">@{escaped_name}</a> устроил гражданскую войну', "HTML"
 
 
+def _get_user_display_name(user) -> str | None:
+    username = getattr(user, "username", None)
+    if username:
+        return f"@{username}"
+    return getattr(user, "full_name", None) or getattr(user, "name", None)
+
+
 def _get_chat_kwargs(update: Update, send_to_general: bool = False) -> dict:
     chat = update.effective_chat
     if chat is None:
@@ -178,7 +185,7 @@ async def civil_war(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     upsert_civil_war_last_used_at(db_path, user.id, now)
     force_success = should_force_success(message.text, user.id)
     is_success = force_success or random.random() < SUCCESS_CHANCE
-    update_civil_war_stats(db_path, user.id, is_success)
+    update_civil_war_stats(db_path, user.id, is_success, _get_user_display_name(user))
     selected_image = get_success_image_path() if is_success else get_fail_image_path()
     caption, parse_mode = _get_success_caption(user) if is_success else (None, None)
     await _send_image(

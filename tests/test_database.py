@@ -107,14 +107,36 @@ class TestDatabase(unittest.TestCase):
         self.assertEqual([row[0] for row in leaderboard], [1, 2, 3])
 
     def test_civil_war_leaderboard_includes_stats_without_user_row(self):
+        db.update_civil_war_stats(self.db_path, 12345, True, '@missing_user')
+
+        leaderboard = db.get_civil_war_leaderboard(self.db_path)
+
+        self.assertEqual(leaderboard[0][0], 12345)
+        self.assertEqual(leaderboard[0][1], '@missing_user')
+        self.assertEqual(leaderboard[0][2], 1)
+        self.assertEqual(leaderboard[0][3], 1)
+
+    def test_civil_war_leaderboard_falls_back_to_user_id_without_display_name(self):
         db.update_civil_war_stats(self.db_path, 12345, True)
 
         leaderboard = db.get_civil_war_leaderboard(self.db_path)
 
         self.assertEqual(leaderboard[0][0], 12345)
         self.assertEqual(leaderboard[0][1], '12345')
-        self.assertEqual(leaderboard[0][2], 1)
-        self.assertEqual(leaderboard[0][3], 1)
+
+    def test_create_missing_users_from_civil_war_stats(self):
+        db.update_civil_war_stats(self.db_path, 12345, True, '@missing_user')
+
+        db.create_missing_users_from_civil_war_stats(self.db_path)
+
+        user = db.get_user(self.db_path, 12345)
+        self.assertEqual(user[0], 12345)
+        self.assertEqual(user[1], '-')
+        self.assertEqual(user[2], '@missing_user')
+        self.assertIsNone(user[3])
+        self.assertEqual(user[4], 'я не заполнял профиль')
+        self.assertEqual(user[5], 0)
+        self.assertEqual(user[6], 0)
 
     def test_civil_war_lowest_winrate(self):
         test_user = create_user({'user_id': 1, 'name': 'Test User', 'tg_username': '@test_user', 'birthday': '01.01.2000',
@@ -156,12 +178,12 @@ class TestDatabase(unittest.TestCase):
         self.assertEqual(lowest_winrate[0], 2)
 
     def test_civil_war_lowest_winrate_includes_stats_without_user_row(self):
-        db.update_civil_war_stats(self.db_path, 12345, False)
+        db.update_civil_war_stats(self.db_path, 12345, False, '@missing_user')
 
         lowest_winrate = db.get_civil_war_lowest_winrate(self.db_path)
 
         self.assertEqual(lowest_winrate[0], 12345)
-        self.assertEqual(lowest_winrate[1], '12345')
+        self.assertEqual(lowest_winrate[1], '@missing_user')
         self.assertEqual(lowest_winrate[2], 1)
         self.assertEqual(lowest_winrate[3], 0)
 

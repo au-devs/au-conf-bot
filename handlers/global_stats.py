@@ -5,7 +5,8 @@ import os
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from db.database import get_civil_war_leaderboard, get_civil_war_lowest_winrate, get_command_last_used_at, \
+from db.database import create_missing_users_from_civil_war_stats, get_civil_war_leaderboard, get_civil_war_lowest_winrate, \
+    get_civil_war_stats_without_display_names, get_command_last_used_at, update_civil_war_display_name, \
     upsert_command_last_used_at
 from handlers.admin_checker import is_admin
 
@@ -87,6 +88,39 @@ def format_global_stats_message(db_path: str) -> str:
     return "\n".join(lines)
 
 
+def get_user_display_name(user) -> str | None:
+    username = getattr(user, "username", None)
+    if username:
+        return f"@{username}"
+    return getattr(user, "full_name", None) or getattr(user, "name", None)
+
+
+async def refresh_missing_civil_war_display_names(update: Update, context: ContextTypes.DEFAULT_TYPE, db_path: str) -> None:
+    chat = update.effective_chat
+    if chat is None or getattr(chat, "type", None) == "private":
+        return
+
+    user_ids = get_civil_war_stats_without_display_names(db_path)
+    if not user_ids:
+        return
+
+    for user_id in user_ids:
+        try:
+            chat_member = await context.bot.get_chat_member(chat_id=chat.id, user_id=user_id)
+        except Exception as e:
+            logger.warning(f"Failed to refresh civil war display_name for user_id={user_id} in chat_id={chat.id}: {e}")
+            continue
+
+        display_name = get_user_display_name(chat_member.user)
+        if display_name:
+            update_civil_war_display_name(db_path, user_id, display_name)
+
+
+async def sync_civil_war_users(update: Update, context: ContextTypes.DEFAULT_TYPE, db_path: str) -> None:
+    await refresh_missing_civil_war_display_names(update, context, db_path)
+    create_missing_users_from_civil_war_stats(db_path)
+
+
 def get_remaining_cooldown_message(last_used_at: datetime.datetime, now: datetime.datetime) -> str:
     cooldown = get_stats_cooldown()
     remaining = cooldown - (now - last_used_at)
@@ -130,6 +164,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     if not bypass_cooldown:
         upsert_command_last_used_at(db_path, STATS_COMMAND, now)
+    await sync_civil_war_users(update, context, db_path)
     await message.reply_text(format_global_stats_message(db_path))
 
 
@@ -144,7 +179,9 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     register_stats_chat(context, chat.id if chat is not None else None)
-    await message.reply_text(format_global_stats_message(os.getenv("DB_PATH")))
+    db_path = os.getenv("DB_PATH")
+    await sync_civil_war_users(update, context, db_path)
+    await message.reply_text(format_global_stats_message(db_path))
 
 
 async def send_daily_stats(context: ContextTypes.DEFAULT_TYPE) -> None:

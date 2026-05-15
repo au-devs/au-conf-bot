@@ -5,7 +5,7 @@ import types
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 telegram_module = types.ModuleType('telegram')
 telegram_ext_module = types.ModuleType('telegram.ext')
@@ -24,7 +24,7 @@ telegram_ext_module.ContextTypes = DummyContextTypes
 sys.modules.setdefault('telegram', telegram_module)
 sys.modules.setdefault('telegram.ext', telegram_ext_module)
 
-from handlers.civil_war import _get_success_caption, _send_image, _send_text, get_cooldown
+from handlers.civil_war import _get_success_caption, _get_user_display_name, _send_image, _send_text, civil_war, get_cooldown
 
 
 def build_update(thread_id: int = 42):
@@ -58,6 +58,36 @@ class TestCivilWarThreading(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(caption, '@ramil устроил гражданскую войну')
         self.assertIsNone(parse_mode)
+
+    def test_user_display_name_prefers_username(self):
+        update = build_update()
+
+        display_name = _get_user_display_name(update.effective_user)
+
+        self.assertEqual(display_name, '@ramil')
+
+    async def test_civil_war_stores_user_display_name(self):
+        update = build_update()
+        update.effective_message.text = 'гражданская война'
+        context = build_context()
+
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            temp_file.write(b'test')
+            temp_path = Path(temp_file.name)
+
+        try:
+            with patch('handlers.civil_war.os.getenv', side_effect=lambda name, default=None: 'users_test.sqlite' if name == 'DB_PATH' else default), \
+                    patch('handlers.civil_war.get_civil_war_last_used_at', return_value=None), \
+                    patch('handlers.civil_war.upsert_civil_war_last_used_at'), \
+                    patch('handlers.civil_war.is_admin', return_value=False), \
+                    patch('handlers.civil_war.random.random', return_value=1), \
+                    patch('handlers.civil_war.get_fail_image_path', return_value=temp_path), \
+                    patch('handlers.civil_war.update_civil_war_stats') as update_stats:
+                await civil_war(update, context)
+        finally:
+            os.unlink(temp_path)
+
+        update_stats.assert_called_once_with('users_test.sqlite', 123, False, '@ramil')
 
     async def test_send_text_keeps_current_topic(self):
         update = build_update()

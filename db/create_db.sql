@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS civil_war_cooldowns (
 
 CREATE TABLE IF NOT EXISTS civil_war_stats (
     user_id INTEGER NOT NULL PRIMARY KEY,
+    display_name VARCHAR(255) NULL,
     attempts INTEGER NOT NULL DEFAULT 0,
     successes INTEGER NOT NULL DEFAULT 0
 );

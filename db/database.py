@@ -404,14 +404,14 @@ def get_civil_war_leaderboard(
             cursor = conn.cursor()
             query = """
                 SELECT
-                    users.user_id,
-                    COALESCE(users.tg_username, users.name, CAST(users.user_id AS TEXT)) AS display_name,
+                    civil_war_stats.user_id,
+                    COALESCE(users.tg_username, users.name, CAST(civil_war_stats.user_id AS TEXT)) AS display_name,
                     civil_war_stats.attempts,
                     civil_war_stats.successes,
                     CAST(civil_war_stats.successes AS REAL) / civil_war_stats.attempts AS winrate,
                     (civil_war_stats.successes + ?) / (civil_war_stats.attempts + ?) AS adjusted_winrate
                 FROM civil_war_stats
-                INNER JOIN users ON users.user_id = civil_war_stats.user_id
+                LEFT JOIN users ON users.user_id = civil_war_stats.user_id
                 WHERE civil_war_stats.attempts > 0
                 ORDER BY adjusted_winrate DESC, winrate DESC, civil_war_stats.successes DESC, civil_war_stats.attempts DESC
                 """
@@ -443,14 +443,14 @@ def get_civil_war_lowest_winrate(
             cursor.execute(
                 """
                 SELECT
-                    users.user_id,
-                    COALESCE(users.tg_username, users.name, CAST(users.user_id AS TEXT)) AS display_name,
+                    civil_war_stats.user_id,
+                    COALESCE(users.tg_username, users.name, CAST(civil_war_stats.user_id AS TEXT)) AS display_name,
                     civil_war_stats.attempts,
                     civil_war_stats.successes,
                     CAST(civil_war_stats.successes AS REAL) / civil_war_stats.attempts AS winrate,
                     (civil_war_stats.successes + ?) / (civil_war_stats.attempts + ?) AS adjusted_winrate
                 FROM civil_war_stats
-                INNER JOIN users ON users.user_id = civil_war_stats.user_id
+                LEFT JOIN users ON users.user_id = civil_war_stats.user_id
                 WHERE civil_war_stats.attempts > 0
                 ORDER BY adjusted_winrate ASC, winrate ASC, civil_war_stats.successes ASC, civil_war_stats.attempts DESC
                 LIMIT 1

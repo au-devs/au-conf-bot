@@ -106,6 +106,16 @@ class TestDatabase(unittest.TestCase):
 
         self.assertEqual([row[0] for row in leaderboard], [1, 2, 3])
 
+    def test_civil_war_leaderboard_includes_stats_without_user_row(self):
+        db.update_civil_war_stats(self.db_path, 12345, True)
+
+        leaderboard = db.get_civil_war_leaderboard(self.db_path)
+
+        self.assertEqual(leaderboard[0][0], 12345)
+        self.assertEqual(leaderboard[0][1], '12345')
+        self.assertEqual(leaderboard[0][2], 1)
+        self.assertEqual(leaderboard[0][3], 1)
+
     def test_civil_war_lowest_winrate(self):
         test_user = create_user({'user_id': 1, 'name': 'Test User', 'tg_username': '@test_user', 'birthday': '01.01.2000',
                                  'wishlist_url': 'https://example1.com', 'money_gifts': True, 'funny_gifts': True})
@@ -144,6 +154,16 @@ class TestDatabase(unittest.TestCase):
         lowest_winrate = db.get_civil_war_lowest_winrate(self.db_path)
 
         self.assertEqual(lowest_winrate[0], 2)
+
+    def test_civil_war_lowest_winrate_includes_stats_without_user_row(self):
+        db.update_civil_war_stats(self.db_path, 12345, False)
+
+        lowest_winrate = db.get_civil_war_lowest_winrate(self.db_path)
+
+        self.assertEqual(lowest_winrate[0], 12345)
+        self.assertEqual(lowest_winrate[1], '12345')
+        self.assertEqual(lowest_winrate[2], 1)
+        self.assertEqual(lowest_winrate[3], 0)
 
     def test_command_cooldown_persistence(self):
         last_used_at = datetime(2026, 5, 15, 12, 0, 0)

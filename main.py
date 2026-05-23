@@ -9,8 +9,7 @@ from handlers.new_database import new_database
 from handlers.message_handler import message_handler, username_updater
 from handlers.get_users import get_users
 from handlers.add_user import add_user
-from handlers.civil_war_admin_config import civil_war_config, help_admin, reset_civil_war_chances, \
-    set_civil_war_chance, set_rare_civil_war_chance
+from handlers.civil_war_admin_config import civil_war_config, help_admin
 from handlers.civil_war import civil_war, civil_war_stats, get_assets_dir
 from handlers.civil_war_seasons import civil_war_season_stats, civil_war_seasons, save_civil_war_season, \
     start_civil_war_season
@@ -43,7 +42,6 @@ async def post_init(application: Application) -> None:
          BotCommand('edit_info', "Изменение информации о себе"),
          BotCommand("civil_war", "Гражданская война"),
          BotCommand("how_much_civil_war", "Статистика гражданской войны"),
-         BotCommand("stats", "Топ-10 винрейта гражданской войны"),
          BotCommand("new_database", "[ADMIN] Создание новой базы данных пользователей"),
          BotCommand("add_user", "[ADMIN] Добавление нового пользователя"),
          BotCommand("get_users", "[ADMIN] Список всех пользователей"),
@@ -73,9 +71,6 @@ def main() -> None:
     application.add_handler(CommandHandler("how_much_civil_war", civil_war_stats))
     application.add_handler(CommandHandler("stats", stats))
     application.add_handler(CommandHandler("civil_war_config", civil_war_config))
-    application.add_handler(CommandHandler("set_civil_war_chance", set_civil_war_chance))
-    application.add_handler(CommandHandler("set_rare_civil_war_chance", set_rare_civil_war_chance))
-    application.add_handler(CommandHandler("reset_civil_war_chances", reset_civil_war_chances))
     application.add_handler(CommandHandler("save_civil_war_season", save_civil_war_season))
     application.add_handler(CommandHandler("start_civil_war_season", start_civil_war_season))
     application.add_handler(CommandHandler("civil_war_seasons", civil_war_seasons))
@@ -86,7 +81,7 @@ def main() -> None:
     else:
         application.job_queue.run_daily(
             send_daily_stats,
-            time=datetime.time(hour=16, minute=0, tzinfo=datetime.timezone.utc),
+            time=datetime.time(hour=6, minute=0, tzinfo=datetime.timezone.utc),
             name="daily_stats",
         )
     # Add message handlers. We explicitly exclude command updates from the generic

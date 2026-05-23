@@ -4,7 +4,7 @@ import logging
 
 from telegram import Update
 from telegram.ext import ContextTypes
-from db.database import get_user
+from db.database import get_user, mark_bot_private_chat_started
 from handlers.quiz import clear_quiz_session, process_quiz
 
 logger = logging.getLogger(__name__)
@@ -17,6 +17,8 @@ async def start(update: Update, context: ContextTypes) -> None:
     user_id = update.message.from_user.id
     logger.info(f"User: {username} with ID {update.message.from_user.id} started bot")
     clear_quiz_session(context)
+    if update.message.chat.type == 'private':
+        mark_bot_private_chat_started(db_path, user_id)
     # Check if user exists in database
     if get_user(db_path, user_id):
         logger.info(f"User {username} exists in database")

@@ -93,7 +93,7 @@ class TestGlobalStats(unittest.IsolatedAsyncioTestCase):
         upsert_last_used.assert_not_called()
         message.reply_text.assert_awaited_once()
 
-    async def test_bot_admin_stats_fetches_missing_usernames_and_creates_users(self):
+    async def test_bot_admin_stats_fetches_missing_usernames_without_creating_users(self):
         db.update_civil_war_stats(self.db_path, 12345, True)
         message = SimpleNamespace(reply_text=AsyncMock())
         update = SimpleNamespace(
@@ -116,7 +116,7 @@ class TestGlobalStats(unittest.IsolatedAsyncioTestCase):
 
         context.bot.get_chat_member.assert_awaited_once_with(chat_id=456, user_id=12345)
         user = db.get_user(self.db_path, 12345)
-        self.assertEqual(user[2], '@missing_user')
+        self.assertEqual(user, tuple())
         message.reply_text.assert_awaited_once()
 
     def test_format_global_stats_message(self):

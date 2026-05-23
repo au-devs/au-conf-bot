@@ -5,9 +5,9 @@ import os
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from db.database import create_missing_users_from_civil_war_stats, get_civil_war_leaderboard, get_civil_war_lowest_winrate, \
-    get_civil_war_stats_without_display_names, get_command_last_used_at, update_civil_war_display_name, \
-    upsert_command_last_used_at
+from db.database import get_civil_war_leaderboard, get_civil_war_lowest_winrate, \
+    get_civil_war_stats_without_display_names, get_command_last_used_at, process_mafia_daily_actions, \
+    update_civil_war_display_name, upsert_command_last_used_at
 from handlers.admin_checker import is_admin
 
 
@@ -47,7 +47,33 @@ def register_stats_chat(context: ContextTypes.DEFAULT_TYPE, chat_id: int | None)
     chat_ids.add(chat_id)
 
 
-def format_global_stats_message(db_path: str) -> str:
+def format_mafia_daily_summary(damaged: list[tuple[str, int, int, int]], defended: list[tuple[str, int, int]]) -> str:
+    if not damaged:
+        if defended:
+            defended_text = ", ".join(
+                f"{display_name} отбился от {attacks} атаки" if attacks == 1 else f"{display_name} отбился от {attacks} атак"
+                for display_name, attacks, _ in defended
+            )
+            return f"Город просыпается, сегодня никто не умер. {defended_text}"
+        return "Город просыпается, сегодня никто не умер"
+
+    victims = []
+    for display_name, damage, attacks, protections in damaged:
+        if protections > 0:
+            victims.append(f"{display_name} нежданул на -{damage} вин, защита срезала {protections} урона")
+        else:
+            victims.append(f"{display_name} нежданул на -{damage} вин")
+    text = f"Город просыпается, но {', '.join(victims)}"
+    if defended:
+        defended_text = ", ".join(
+            f"{display_name} не получил урона: {protections} защиты против {attacks} атаки"
+            for display_name, attacks, protections in defended
+        )
+        text = f"{text}\n{defended_text}"
+    return text
+
+
+def format_global_stats_message(db_path: str, mafia_summary: str | None = None) -> str:
     leaderboard = get_civil_war_leaderboard(
         db_path,
         prior_attempts=BAYES_PRIOR_ATTEMPTS,
@@ -85,6 +111,8 @@ def format_global_stats_message(db_path: str) -> str:
             f"при винрейте {winrate * 100:.2f}% ({successes}/{attempts}). "
             "Бро, тебе надо тренироваться",
         ])
+    if mafia_summary:
+        lines.extend(["", mafia_summary])
     return "\n".join(lines)
 
 
@@ -118,7 +146,6 @@ async def refresh_missing_civil_war_display_names(update: Update, context: Conte
 
 async def sync_civil_war_users(update: Update, context: ContextTypes.DEFAULT_TYPE, db_path: str) -> None:
     await refresh_missing_civil_war_display_names(update, context, db_path)
-    create_missing_users_from_civil_war_stats(db_path)
 
 
 def get_remaining_cooldown_message(last_used_at: datetime.datetime, now: datetime.datetime) -> str:
@@ -153,10 +180,14 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     register_stats_chat(context, chat.id if chat is not None else None)
+    if not await can_bypass_stats_cooldown(update, context):
+        await message.reply_text("/stats во втором сезоне может вызвать только админ.")
+        return
+
     db_path = os.getenv("DB_PATH")
     now = datetime.datetime.now()
     last_used_at = get_command_last_used_at(db_path, STATS_COMMAND)
-    bypass_cooldown = await can_bypass_stats_cooldown(update, context)
+    bypass_cooldown = True
     stats_cooldown = get_stats_cooldown()
     if not bypass_cooldown and last_used_at is not None and now - last_used_at < stats_cooldown:
         await message.reply_text(get_remaining_cooldown_message(last_used_at, now))
@@ -165,12 +196,14 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not bypass_cooldown:
         upsert_command_last_used_at(db_path, STATS_COMMAND, now)
     await sync_civil_war_users(update, context, db_path)
-    await message.reply_text(format_global_stats_message(db_path))
+    damaged, defended = process_mafia_daily_actions(db_path)
+    await message.reply_text(format_global_stats_message(db_path, format_mafia_daily_summary(damaged, defended)))
 
 
 async def send_daily_stats(context: ContextTypes.DEFAULT_TYPE) -> None:
     db_path = os.getenv("DB_PATH")
-    message = format_global_stats_message(db_path)
+    damaged, defended = process_mafia_daily_actions(db_path)
+    message = format_global_stats_message(db_path, format_mafia_daily_summary(damaged, defended))
     chat_ids = sorted(context.bot_data.get(STATS_CHAT_IDS_KEY, set()))
     if not chat_ids:
         logger.info("No chats registered for daily stats")

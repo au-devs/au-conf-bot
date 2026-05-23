@@ -129,18 +129,14 @@ class TestDatabase(unittest.TestCase):
 
         leaderboard = db.get_civil_war_leaderboard(self.db_path)
 
-        self.assertEqual(leaderboard[0][0], 12345)
-        self.assertEqual(leaderboard[0][1], '@missing_user')
-        self.assertEqual(leaderboard[0][2], 1)
-        self.assertEqual(leaderboard[0][3], 1)
+        self.assertEqual(leaderboard, [])
 
     def test_civil_war_leaderboard_falls_back_to_user_id_without_display_name(self):
         db.update_civil_war_stats(self.db_path, 12345, True)
 
         leaderboard = db.get_civil_war_leaderboard(self.db_path)
 
-        self.assertEqual(leaderboard[0][0], 12345)
-        self.assertEqual(leaderboard[0][1], '12345')
+        self.assertEqual(leaderboard, [])
 
     def test_create_missing_users_from_civil_war_stats(self):
         db.update_civil_war_stats(self.db_path, 12345, True, '@missing_user')
@@ -200,12 +196,15 @@ class TestDatabase(unittest.TestCase):
 
         lowest_winrate = db.get_civil_war_lowest_winrate(self.db_path)
 
-        self.assertEqual(lowest_winrate[0], 12345)
-        self.assertEqual(lowest_winrate[1], '@missing_user')
-        self.assertEqual(lowest_winrate[2], 1)
-        self.assertEqual(lowest_winrate[3], 0)
+        self.assertIsNone(lowest_winrate)
 
     def test_civil_war_season_snapshot(self):
+        winner = create_user({'user_id': 1, 'name': 'Winner', 'tg_username': '@winner', 'birthday': '01.01.2000',
+                              'wishlist_url': 'https://example1.com', 'money_gifts': True, 'funny_gifts': True})
+        loser = create_user({'user_id': 2, 'name': 'Loser', 'tg_username': '@loser', 'birthday': '01.01.2000',
+                             'wishlist_url': 'https://example2.com', 'money_gifts': False, 'funny_gifts': True})
+        db.add_user(self.db_path, winner)
+        db.add_user(self.db_path, loser)
         db.update_civil_war_stats(self.db_path, 1, True, '@winner')
         db.update_civil_war_stats(self.db_path, 2, False, '@loser')
         leaderboard = db.get_civil_war_leaderboard(self.db_path)
@@ -228,6 +227,45 @@ class TestDatabase(unittest.TestCase):
         saved_last_used_at = db.get_command_last_used_at(self.db_path, 'stats')
 
         self.assertEqual(saved_last_used_at, last_used_at)
+
+    def test_verified_private_chat_requires_user_and_start(self):
+        self.assertFalse(db.has_verified_private_chat(self.db_path, 1))
+        db.mark_bot_private_chat_started(self.db_path, 1)
+        self.assertFalse(db.has_verified_private_chat(self.db_path, 1))
+
+        user = create_user({'user_id': 1, 'name': 'Test User', 'tg_username': '@test_user', 'birthday': '01.01.2000',
+                            'wishlist_url': 'https://example1.com', 'money_gifts': True, 'funny_gifts': True})
+        db.add_user(self.db_path, user)
+
+        self.assertTrue(db.has_verified_private_chat(self.db_path, 1))
+
+    def test_process_mafia_daily_actions_applies_damage_after_protection(self):
+        attacker = create_user({'user_id': 1, 'name': 'Attacker', 'tg_username': '@attacker', 'birthday': '01.01.2000',
+                                'wishlist_url': 'https://example1.com', 'money_gifts': True, 'funny_gifts': True})
+        target = create_user({'user_id': 2, 'name': 'Target', 'tg_username': '@target', 'birthday': '01.01.2000',
+                              'wishlist_url': 'https://example2.com', 'money_gifts': True, 'funny_gifts': True})
+        db.add_user(self.db_path, attacker)
+        db.add_user(self.db_path, target)
+        for _ in range(5):
+            db.update_civil_war_stats(self.db_path, 2, True)
+        db.add_mafia_daily_action(self.db_path, 1, 'attack', 2)
+        db.add_mafia_daily_action(self.db_path, 1, 'attack', 2)
+        db.add_mafia_daily_action(self.db_path, 2, 'protect')
+
+        damaged, defended = db.process_mafia_daily_actions(self.db_path)
+
+        self.assertEqual(damaged, [('@target', 1, 2, 1)])
+        self.assertEqual(defended, [])
+        self.assertEqual(db.get_civil_war_stats(self.db_path, 2), (5, 4))
+
+    def test_rat_points_persistence(self):
+        self.assertEqual(db.get_rat_points(self.db_path), 1)
+        db.set_rat_points(self.db_path, 3)
+        self.assertEqual(db.get_rat_points(self.db_path), 3)
+        db.create_rat_pending(self.db_path, 1, 3)
+        self.assertEqual(db.get_rat_pending_points(self.db_path, 1), 3)
+        db.delete_rat_pending(self.db_path, 1)
+        self.assertIsNone(db.get_rat_pending_points(self.db_path, 1))
 
     def test_reset_user_reminders(self):
         test_user = create_user({'user_id': 1, 'name': 'Test User', 'tg_username': '@test_user', 'birthday': '01.01.2000',

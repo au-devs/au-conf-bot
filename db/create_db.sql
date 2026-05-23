@@ -48,6 +48,43 @@ CREATE TABLE IF NOT EXISTS civil_war_chance_overrides (
     chance REAL NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS bot_private_chats (
+    user_id INTEGER NOT NULL PRIMARY KEY,
+    started_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS civil_war_mafia_pending (
+    user_id INTEGER NOT NULL PRIMARY KEY,
+    created_at TEXT NOT NULL,
+    state VARCHAR(255) NOT NULL DEFAULT 'choice',
+    FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS civil_war_mafia_daily (
+    event_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    actor_user_id INTEGER NOT NULL,
+    target_user_id INTEGER NULL,
+    action VARCHAR(255) NOT NULL,
+    created_at TEXT NOT NULL,
+    processed_at TEXT NULL,
+    FOREIGN KEY (actor_user_id) REFERENCES users (user_id) ON DELETE CASCADE,
+    FOREIGN KEY (target_user_id) REFERENCES users (user_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS civil_war_rat_state (
+    id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
+    points INTEGER NOT NULL DEFAULT 1,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS civil_war_rat_pending (
+    user_id INTEGER NOT NULL PRIMARY KEY,
+    points INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS civil_war_seasons (
     season_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     name VARCHAR(255) NOT NULL,

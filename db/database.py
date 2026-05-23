@@ -97,6 +97,67 @@ def ensure_civil_war_seasons_tables(conn: sqlite3.Connection) -> None:
     )
 
 
+def ensure_bot_private_chats_table(conn: sqlite3.Connection) -> None:
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS bot_private_chats (
+            user_id INTEGER NOT NULL PRIMARY KEY,
+            started_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
+        )
+        """
+    )
+
+
+def ensure_civil_war_season2_tables(conn: sqlite3.Connection) -> None:
+    cursor = conn.cursor()
+    ensure_bot_private_chats_table(conn)
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS civil_war_mafia_pending (
+            user_id INTEGER NOT NULL PRIMARY KEY,
+            created_at TEXT NOT NULL,
+            state VARCHAR(255) NOT NULL DEFAULT 'choice',
+            FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS civil_war_mafia_daily (
+            event_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+            actor_user_id INTEGER NOT NULL,
+            target_user_id INTEGER NULL,
+            action VARCHAR(255) NOT NULL,
+            created_at TEXT NOT NULL,
+            processed_at TEXT NULL,
+            FOREIGN KEY (actor_user_id) REFERENCES users (user_id) ON DELETE CASCADE,
+            FOREIGN KEY (target_user_id) REFERENCES users (user_id) ON DELETE CASCADE
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS civil_war_rat_state (
+            id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
+            points INTEGER NOT NULL DEFAULT 1,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS civil_war_rat_pending (
+            user_id INTEGER NOT NULL PRIMARY KEY,
+            points INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
+        )
+        """
+    )
+
+
 def get_db_tables(db_path: str) -> list:
     logger.info(f"Fetching tables from database at {db_path}")
     tables = []
@@ -416,17 +477,37 @@ def update_civil_war_stats(
             cursor.execute(
                 """
                 INSERT INTO civil_war_stats (user_id, display_name, attempts, successes)
-                VALUES (?, ?, 1, ?)
+                VALUES (?, ?, 1, MAX(?, 0))
                 ON CONFLICT(user_id) DO UPDATE SET
                     display_name = COALESCE(excluded.display_name, display_name),
                     attempts = attempts + 1,
-                    successes = successes + excluded.successes
+                    successes = MAX(successes + ?, 0)
                 """,
-                (user_id, display_name, int(successes_delta)),
+                (user_id, display_name, int(successes_delta), int(successes_delta)),
             )
             conn.commit()
     except Exception as e:
         logger.error(f"Error updating civil war stats for user_id={user_id} in database at {db_path}: {str(e)}")
+
+
+def adjust_civil_war_successes(db_path: str, user_id: int, successes_delta: int) -> None:
+    logger.info(f"Adjusting civil war successes for user_id={user_id} in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_stats_table(conn)
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO civil_war_stats (user_id, attempts, successes)
+                VALUES (?, 0, MAX(?, 0))
+                ON CONFLICT(user_id) DO UPDATE SET
+                    successes = MAX(successes + ?, 0)
+                """,
+                (user_id, int(successes_delta), int(successes_delta)),
+            )
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error adjusting civil war successes for user_id={user_id} in database at {db_path}: {str(e)}")
 
 
 def clear_civil_war_stats(db_path: str) -> None:
@@ -619,7 +700,7 @@ def get_civil_war_leaderboard(
                     CAST(civil_war_stats.successes AS REAL) / civil_war_stats.attempts AS winrate,
                     (civil_war_stats.successes + ?) / (civil_war_stats.attempts + ?) AS adjusted_winrate
                 FROM civil_war_stats
-                LEFT JOIN users ON users.user_id = civil_war_stats.user_id
+                JOIN users ON users.user_id = civil_war_stats.user_id
                 WHERE civil_war_stats.attempts > 0
                 ORDER BY adjusted_winrate DESC, winrate DESC, civil_war_stats.successes DESC, civil_war_stats.attempts DESC
                 """
@@ -658,7 +739,7 @@ def get_civil_war_lowest_winrate(
                     CAST(civil_war_stats.successes AS REAL) / civil_war_stats.attempts AS winrate,
                     (civil_war_stats.successes + ?) / (civil_war_stats.attempts + ?) AS adjusted_winrate
                 FROM civil_war_stats
-                LEFT JOIN users ON users.user_id = civil_war_stats.user_id
+                JOIN users ON users.user_id = civil_war_stats.user_id
                 WHERE civil_war_stats.attempts > 0
                 ORDER BY adjusted_winrate ASC, winrate ASC, civil_war_stats.successes ASC, civil_war_stats.attempts DESC
                 LIMIT 1
@@ -761,6 +842,304 @@ def get_civil_war_season_entries(db_path: str, season_ref: str) -> tuple[int, st
     except Exception as e:
         logger.error(f"Error fetching civil war season {season_ref!r} from database at {db_path}: {str(e)}")
         return None
+
+
+def mark_bot_private_chat_started(db_path: str, user_id: int, started_at: datetime | None = None) -> None:
+    logger.info(f"Marking private chat as started for user_id={user_id} in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_bot_private_chats_table(conn)
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO bot_private_chats (user_id, started_at)
+                VALUES (?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET started_at = excluded.started_at
+                """,
+                (user_id, (started_at or datetime.now()).isoformat()),
+            )
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error marking private chat for user_id={user_id} in database at {db_path}: {str(e)}")
+
+
+def has_verified_private_chat(db_path: str, user_id: int) -> bool:
+    logger.info(f"Checking verified private chat for user_id={user_id} in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_bot_private_chats_table(conn)
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT 1
+                FROM users
+                JOIN bot_private_chats ON bot_private_chats.user_id = users.user_id
+                WHERE users.user_id = ?
+                """,
+                (user_id,),
+            )
+            return cursor.fetchone() is not None
+    except Exception as e:
+        logger.error(f"Error checking verified private chat for user_id={user_id} in database at {db_path}: {str(e)}")
+        return False
+
+
+def create_mafia_pending(db_path: str, user_id: int, created_at: datetime | None = None) -> None:
+    logger.info(f"Creating mafia pending action for user_id={user_id} in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_season2_tables(conn)
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO civil_war_mafia_pending (user_id, created_at, state)
+                VALUES (?, ?, 'choice')
+                ON CONFLICT(user_id) DO UPDATE SET created_at = excluded.created_at, state = 'choice'
+                """,
+                (user_id, (created_at or datetime.now()).isoformat()),
+            )
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error creating mafia pending action for user_id={user_id} in database at {db_path}: {str(e)}")
+
+
+def get_mafia_pending_state(db_path: str, user_id: int) -> str | None:
+    logger.info(f"Fetching mafia pending state for user_id={user_id} in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_season2_tables(conn)
+            cursor = conn.cursor()
+            cursor.execute("SELECT state FROM civil_war_mafia_pending WHERE user_id = ?", (user_id,))
+            row = cursor.fetchone()
+            return None if row is None else str(row[0])
+    except Exception as e:
+        logger.error(f"Error fetching mafia pending state for user_id={user_id} in database at {db_path}: {str(e)}")
+        return None
+
+
+def set_mafia_pending_state(db_path: str, user_id: int, state: str) -> None:
+    logger.info(f"Setting mafia pending state for user_id={user_id} in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_season2_tables(conn)
+            cursor = conn.cursor()
+            cursor.execute("UPDATE civil_war_mafia_pending SET state = ? WHERE user_id = ?", (state, user_id))
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error setting mafia pending state for user_id={user_id} in database at {db_path}: {str(e)}")
+
+
+def delete_mafia_pending(db_path: str, user_id: int) -> None:
+    logger.info(f"Deleting mafia pending action for user_id={user_id} in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_season2_tables(conn)
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM civil_war_mafia_pending WHERE user_id = ?", (user_id,))
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error deleting mafia pending action for user_id={user_id} in database at {db_path}: {str(e)}")
+
+
+def add_mafia_daily_action(
+        db_path: str,
+        actor_user_id: int,
+        action: str,
+        target_user_id: int | None = None,
+        created_at: datetime | None = None,
+) -> None:
+    logger.info(f"Adding mafia daily action={action} for actor_user_id={actor_user_id} in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_season2_tables(conn)
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO civil_war_mafia_daily (actor_user_id, target_user_id, action, created_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (actor_user_id, target_user_id, action, (created_at or datetime.now()).isoformat()),
+            )
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error adding mafia daily action for actor_user_id={actor_user_id} in database at {db_path}: {str(e)}")
+
+
+def find_verified_civil_war_user(db_path: str, token: str) -> tuple[int, str] | None:
+    normalized = token.strip()
+    if not normalized:
+        return None
+    username = normalized if normalized.startswith("@") else f"@{normalized}"
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_stats_table(conn)
+            cursor = conn.cursor()
+            if normalized.lstrip("@").isdigit():
+                cursor.execute(
+                    """
+                    SELECT users.user_id, COALESCE(users.tg_username, users.name, CAST(users.user_id AS TEXT))
+                    FROM users
+                    JOIN civil_war_stats ON civil_war_stats.user_id = users.user_id
+                    WHERE users.user_id = ? AND civil_war_stats.attempts > 0
+                    """,
+                    (int(normalized.lstrip("@")),),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT users.user_id, COALESCE(users.tg_username, users.name, CAST(users.user_id AS TEXT))
+                    FROM users
+                    JOIN civil_war_stats ON civil_war_stats.user_id = users.user_id
+                    WHERE users.tg_username = ? AND civil_war_stats.attempts > 0
+                    """,
+                    (username,),
+                )
+            row = cursor.fetchone()
+            return None if row is None else (int(row[0]), str(row[1]))
+    except Exception as e:
+        logger.error(f"Error finding verified civil war user {token!r} in database at {db_path}: {str(e)}")
+        return None
+
+
+def process_mafia_daily_actions(db_path: str, processed_at: datetime | None = None) -> tuple[list[tuple[str, int, int, int]], list[tuple[str, int, int]]]:
+    logger.info(f"Processing mafia daily actions in database at {db_path}")
+    processed_time = processed_at or datetime.now()
+    damaged: list[tuple[str, int, int, int]] = []
+    defended: list[tuple[str, int, int]] = []
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_season2_tables(conn)
+            ensure_civil_war_stats_table(conn)
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT target_user_id, COUNT(*)
+                FROM civil_war_mafia_daily
+                WHERE processed_at IS NULL AND action = 'attack' AND target_user_id IS NOT NULL
+                GROUP BY target_user_id
+                """
+            )
+            attacks = {int(row[0]): int(row[1]) for row in cursor.fetchall()}
+            cursor.execute(
+                """
+                SELECT actor_user_id, COUNT(*)
+                FROM civil_war_mafia_daily
+                WHERE processed_at IS NULL AND action = 'protect'
+                GROUP BY actor_user_id
+                """
+            )
+            protections = {int(row[0]): int(row[1]) for row in cursor.fetchall()}
+            for target_user_id, attack_count in attacks.items():
+                protection_count = protections.get(target_user_id, 0)
+                damage = max(attack_count - protection_count, 0)
+                cursor.execute(
+                    """
+                    SELECT COALESCE(users.tg_username, users.name, CAST(users.user_id AS TEXT))
+                    FROM users
+                    WHERE users.user_id = ?
+                    """,
+                    (target_user_id,),
+                )
+                row = cursor.fetchone()
+                display_name = str(row[0]) if row is not None else str(target_user_id)
+                if damage > 0:
+                    cursor.execute(
+                        """
+                        INSERT INTO civil_war_stats (user_id, attempts, successes)
+                        VALUES (?, 0, 0)
+                        ON CONFLICT(user_id) DO UPDATE SET successes = MAX(successes - ?, 0)
+                        """,
+                        (target_user_id, damage),
+                    )
+                    damaged.append((display_name, damage, attack_count, protection_count))
+                elif protection_count > 0:
+                    defended.append((display_name, attack_count, protection_count))
+            cursor.execute(
+                "UPDATE civil_war_mafia_daily SET processed_at = ? WHERE processed_at IS NULL",
+                (processed_time.isoformat(),),
+            )
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error processing mafia daily actions in database at {db_path}: {str(e)}")
+    return damaged, defended
+
+
+def get_rat_points(db_path: str) -> int:
+    logger.info(f"Fetching rat points from database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_season2_tables(conn)
+            cursor = conn.cursor()
+            cursor.execute("SELECT points FROM civil_war_rat_state WHERE id = 1")
+            row = cursor.fetchone()
+            return 1 if row is None else max(int(row[0]), 1)
+    except Exception as e:
+        logger.error(f"Error fetching rat points from database at {db_path}: {str(e)}")
+        return 1
+
+
+def set_rat_points(db_path: str, points: int, updated_at: datetime | None = None) -> None:
+    logger.info(f"Setting rat points={points} in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_season2_tables(conn)
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO civil_war_rat_state (id, points, updated_at)
+                VALUES (1, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET points = excluded.points, updated_at = excluded.updated_at
+                """,
+                (max(int(points), 1), (updated_at or datetime.now()).isoformat()),
+            )
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error setting rat points in database at {db_path}: {str(e)}")
+
+
+def create_rat_pending(db_path: str, user_id: int, points: int, created_at: datetime | None = None) -> None:
+    logger.info(f"Creating rat pending action for user_id={user_id} in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_season2_tables(conn)
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO civil_war_rat_pending (user_id, points, created_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET points = excluded.points, created_at = excluded.created_at
+                """,
+                (user_id, max(int(points), 1), (created_at or datetime.now()).isoformat()),
+            )
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error creating rat pending action for user_id={user_id} in database at {db_path}: {str(e)}")
+
+
+def get_rat_pending_points(db_path: str, user_id: int) -> int | None:
+    logger.info(f"Fetching rat pending action for user_id={user_id} in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_season2_tables(conn)
+            cursor = conn.cursor()
+            cursor.execute("SELECT points FROM civil_war_rat_pending WHERE user_id = ?", (user_id,))
+            row = cursor.fetchone()
+            return None if row is None else max(int(row[0]), 1)
+    except Exception as e:
+        logger.error(f"Error fetching rat pending action for user_id={user_id} in database at {db_path}: {str(e)}")
+        return None
+
+
+def delete_rat_pending(db_path: str, user_id: int) -> None:
+    logger.info(f"Deleting rat pending action for user_id={user_id} in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_season2_tables(conn)
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM civil_war_rat_pending WHERE user_id = ?", (user_id,))
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error deleting rat pending action for user_id={user_id} in database at {db_path}: {str(e)}")
 
 
 def get_command_last_used_at(db_path: str, command_name: str) -> datetime | None:

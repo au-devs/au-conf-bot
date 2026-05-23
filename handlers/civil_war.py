@@ -9,15 +9,19 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from db.database import get_civil_war_last_used_at, upsert_civil_war_last_used_at, update_civil_war_stats, \
-    get_civil_war_stats
-from handlers.civil_war_chances import get_global_rare_chance, get_global_success_chance
+    get_civil_war_stats, get_rat_points, has_verified_private_chat, set_rat_points
+from handlers.civil_war_chances import get_global_mafia_event_chance, get_global_rare_chance, \
+    get_global_rare_loss_chance, get_global_rat_event_chance, get_global_success_chance
+from handlers.civil_war_season2 import start_mafia_event, start_rat_event
 
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_COOLDOWN_HOURS = 1
 RARE_SUCCESS_POINTS = 10
+RARE_LOSS_POINTS = -1
 DEFAULT_RARE_CAPTION_TEMPLATE = "налудил себе +10 винов"
+DEFAULT_RARE_FAIL_CAPTION_TEMPLATE = "словил редкое поражение: -1 вин"
 COMMAND_TEXT = "гражданская война"
 STATS_COMMAND_TEXT = "/how-much-civil-war"
 DEFAULT_ASSETS_DIR = Path("/data/assets")
@@ -54,8 +58,23 @@ def get_rare_image_path() -> Path:
     return get_assets_dir() / "rare.jpg"
 
 
+def get_rare_fail_image_path() -> Path:
+    return get_assets_dir() / "rare_fail.jpg"
+
+
+def get_season2_unverified_message() -> str:
+    return (
+        "Сезонный ивент сгорел: ты не написал /start боту в личку "
+        "или не заполнил профиль."
+    )
+
+
 def get_rare_caption_template() -> str:
     return os.getenv("RARE_CIVIL_WAR_CAPTION_TEMPLATE", DEFAULT_RARE_CAPTION_TEMPLATE)
+
+
+def get_rare_fail_caption_template() -> str:
+    return os.getenv("RARE_FAIL_CIVIL_WAR_CAPTION_TEMPLATE", DEFAULT_RARE_FAIL_CAPTION_TEMPLATE)
 
 
 def is_civil_war_trigger(text: str | None) -> bool:
@@ -117,6 +136,13 @@ def _get_success_caption(user) -> tuple[str, str | None]:
     return f'<a href="tg://user?id={user_id}">@{escaped_name}</a> устроил гражданскую войну', "HTML"
 
 
+def _append_rat_bonus_caption(caption: str, parse_mode: str | None, rat_bonus: int) -> tuple[str, str | None]:
+    bonus_text = f" и забрал крысиный банк +{rat_bonus} винов"
+    if parse_mode == "HTML":
+        bonus_text = html.escape(bonus_text)
+    return f"{caption}{bonus_text}", parse_mode
+
+
 def _get_user_caption_mention(user) -> tuple[str, str | None]:
     username = getattr(user, "username", None)
     if username:
@@ -134,6 +160,14 @@ def _get_user_caption_mention(user) -> tuple[str, str | None]:
 def _get_rare_success_caption(user) -> tuple[str, str | None]:
     mention, parse_mode = _get_user_caption_mention(user)
     template = get_rare_caption_template()
+    if parse_mode == "HTML":
+        template = html.escape(template)
+    return f"{mention} {template}", parse_mode
+
+
+def _get_rare_fail_caption(user) -> tuple[str, str | None]:
+    mention, parse_mode = _get_user_caption_mention(user)
+    template = get_rare_fail_caption_template()
     if parse_mode == "HTML":
         template = html.escape(template)
     return f"{mention} {template}", parse_mode
@@ -206,17 +240,60 @@ async def civil_war(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     upsert_civil_war_last_used_at(db_path, user.id, now)
     roll = random.random()
     rare_success_chance = get_global_rare_chance(db_path)
+    rare_loss_chance = get_global_rare_loss_chance(db_path)
+    mafia_event_chance = get_global_mafia_event_chance(db_path)
+    rat_event_chance = get_global_rat_event_chance(db_path)
     success_chance = get_global_success_chance(db_path)
-    is_rare_success = roll < rare_success_chance
-    is_success = is_rare_success or roll < success_chance
-    successes_delta = RARE_SUCCESS_POINTS if is_rare_success else int(is_success)
-    update_civil_war_stats(db_path, user.id, successes_delta, _get_user_display_name(user))
+
+    threshold = rare_success_chance
+    is_rare_success = roll < threshold
+    threshold += rare_loss_chance
+    is_rare_loss = not is_rare_success and roll < threshold
+    threshold += mafia_event_chance
+    is_mafia_event = not is_rare_success and not is_rare_loss and roll < threshold
+    threshold += rat_event_chance
+    is_rat_event = not is_rare_success and not is_rare_loss and not is_mafia_event and roll < threshold
+    threshold += success_chance
+    is_success = not any([is_rare_success, is_rare_loss, is_mafia_event, is_rat_event]) and roll < threshold
+
+    rat_bonus = 0
+    if is_success:
+        rat_points = get_rat_points(db_path)
+        if rat_points > 1:
+            rat_bonus = rat_points
+            set_rat_points(db_path, 1)
+
     if is_rare_success:
+        successes_delta = RARE_SUCCESS_POINTS
+    elif is_rare_loss:
+        successes_delta = RARE_LOSS_POINTS
+    else:
+        successes_delta = int(is_success) + rat_bonus
+    update_civil_war_stats(db_path, user.id, successes_delta, _get_user_display_name(user))
+
+    if is_mafia_event or is_rat_event:
+        if has_verified_private_chat(db_path, user.id):
+            if is_mafia_event:
+                event_started = await start_mafia_event(update, context, db_path)
+            else:
+                event_started = await start_rat_event(update, context, db_path)
+            if not event_started:
+                await _send_text(context.bot, update, get_season2_unverified_message())
+        else:
+            await _send_text(context.bot, update, get_season2_unverified_message())
+        selected_image = get_fail_image_path()
+        caption, parse_mode = (None, None)
+    elif is_rare_success:
         selected_image = get_rare_image_path()
         caption, parse_mode = _get_rare_success_caption(user)
+    elif is_rare_loss:
+        selected_image = get_rare_fail_image_path()
+        caption, parse_mode = _get_rare_fail_caption(user)
     else:
         selected_image = get_success_image_path() if is_success else get_fail_image_path()
         caption, parse_mode = _get_success_caption(user) if is_success else (None, None)
+        if is_success and rat_bonus > 0 and caption is not None:
+            caption, parse_mode = _append_rat_bonus_caption(caption, parse_mode, rat_bonus)
     await _send_image(
         context.bot,
         update,

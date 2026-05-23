@@ -26,8 +26,8 @@ telegram_ext_module.ContextTypes = DummyContextTypes
 sys.modules.setdefault('telegram', telegram_module)
 sys.modules.setdefault('telegram.ext', telegram_ext_module)
 
-from handlers.civil_war import _get_rare_success_caption, _get_success_caption, _get_user_display_name, _send_image, \
-    _send_text, civil_war, get_cooldown, is_civil_war_trigger
+from handlers.civil_war import _get_rare_fail_caption, _get_rare_success_caption, _get_success_caption, \
+    _get_user_display_name, _send_image, _send_text, civil_war, get_cooldown, is_civil_war_trigger
 
 
 def build_update(thread_id: int = 42):
@@ -83,6 +83,15 @@ class TestCivilWarThreading(unittest.IsolatedAsyncioTestCase):
             caption, parse_mode = _get_rare_success_caption(update.effective_user)
 
         self.assertEqual(caption, '@ramil съел сладкий пирог, +10 винов')
+        self.assertIsNone(parse_mode)
+
+    def test_rare_fail_caption_uses_env_template(self):
+        update = build_update()
+
+        with patch('handlers.civil_war.os.getenv', return_value='проиграл мафии, -1 вин'):
+            caption, parse_mode = _get_rare_fail_caption(update.effective_user)
+
+        self.assertEqual(caption, '@ramil проиграл мафии, -1 вин')
         self.assertIsNone(parse_mode)
 
     async def test_civil_war_stores_user_display_name(self):
@@ -155,6 +164,56 @@ class TestCivilWarThreading(unittest.IsolatedAsyncioTestCase):
             os.unlink(temp_path)
 
         update_stats.assert_called_once_with(self.db_path, 123, 10, '@ramil')
+
+    async def test_civil_war_rare_loss_uses_rare_fail_image_and_caption(self):
+        update = build_update()
+        update.effective_message.text = 'гражданская война'
+        context = build_context()
+
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            temp_file.write(b'test')
+            temp_path = Path(temp_file.name)
+
+        try:
+            with patch('handlers.civil_war.os.getenv', side_effect=lambda name, default=None: self.db_path if name == 'DB_PATH' else default), \
+                    patch('handlers.civil_war.get_civil_war_last_used_at', return_value=None), \
+                    patch('handlers.civil_war.upsert_civil_war_last_used_at'), \
+                    patch('handlers.civil_war.random.random', return_value=0.01), \
+                    patch('handlers.civil_war.get_rare_fail_image_path', return_value=temp_path), \
+                    patch('handlers.civil_war.update_civil_war_stats') as update_stats:
+                await civil_war(update, context)
+        finally:
+            os.unlink(temp_path)
+
+        update_stats.assert_called_once_with(self.db_path, 123, -1, '@ramil')
+        self.assertEqual(
+            context.bot.send_photo.await_args.kwargs['caption'],
+            '@ramil словил редкое поражение: -1 вин',
+        )
+
+    async def test_civil_war_normal_success_collects_rat_bank(self):
+        db.set_rat_points(self.db_path, 3)
+        update = build_update()
+        update.effective_message.text = 'гражданская война'
+        context = build_context()
+
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            temp_file.write(b'test')
+            temp_path = Path(temp_file.name)
+
+        try:
+            with patch('handlers.civil_war.os.getenv', side_effect=lambda name, default=None: self.db_path if name == 'DB_PATH' else default), \
+                    patch('handlers.civil_war.get_civil_war_last_used_at', return_value=None), \
+                    patch('handlers.civil_war.upsert_civil_war_last_used_at'), \
+                    patch('handlers.civil_war.random.random', return_value=0.15), \
+                    patch('handlers.civil_war.get_success_image_path', return_value=temp_path):
+                await civil_war(update, context)
+        finally:
+            os.unlink(temp_path)
+
+        self.assertEqual(db.get_civil_war_stats(self.db_path, 123), (1, 4))
+        self.assertEqual(db.get_rat_points(self.db_path), 1)
+        self.assertIn('крысиный банк +3', context.bot.send_photo.await_args.kwargs['caption'])
 
     def test_civil_war_dash_command_is_not_trigger(self):
         self.assertFalse(is_civil_war_trigger('/civil-war'))

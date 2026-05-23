@@ -82,8 +82,11 @@ class TestCivilWarAdminConfig(unittest.IsolatedAsyncioTestCase):
             await civil_war_config(update, context)
 
         message = update.effective_message.reply_text.await_args.args[0]
-        self.assertIn('Текущий общий шанс победы: 10.000%', message)
-        self.assertIn('Текущий общий шанс rare: 2.000%', message)
+        self.assertIn('1. обычная победа: 10.000%', message)
+        self.assertIn('2. редкая победа: 2.000%', message)
+        self.assertIn('3. редкое поражение: 1.330%', message)
+        self.assertIn('4. мафиозный ивент: 8.880%', message)
+        self.assertIn('5. крысиный ивент: 1.500%', message)
         self.assertIn('global_success = 10.000%', message)
         self.assertIn('global_rare = 2.000%', message)
 

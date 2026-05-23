@@ -8,8 +8,15 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_SUCCESS_CHANCE = 0.0666
 DEFAULT_RARE_SUCCESS_CHANCE = 0.00666
+DEFAULT_RARE_LOSS_CHANCE = 0.0133
+DEFAULT_MAFIA_EVENT_CHANCE = 0.0888
+DEFAULT_RAT_EVENT_CHANCE = 0.015
+
 GLOBAL_SUCCESS_KEY = "global_success"
 GLOBAL_RARE_KEY = "global_rare"
+GLOBAL_RARE_LOSS_KEY = "global_rare_loss"
+GLOBAL_MAFIA_EVENT_KEY = "global_mafia_event"
+GLOBAL_RAT_EVENT_KEY = "global_rat_event"
 
 
 def normalize_chance(value: float) -> float:
@@ -53,3 +60,24 @@ def get_global_rare_chance(db_path: str) -> float:
     if override is not None:
         return normalize_chance(override)
     return get_env_chance("CIVIL_WAR_RARE_SUCCESS_CHANCE", DEFAULT_RARE_SUCCESS_CHANCE)
+
+
+def get_global_rare_loss_chance(db_path: str) -> float:
+    override = get_civil_war_chance_override(db_path, GLOBAL_RARE_LOSS_KEY)
+    if override is not None:
+        return normalize_chance(override)
+    return get_env_chance("CIVIL_WAR_RARE_LOSS_CHANCE", DEFAULT_RARE_LOSS_CHANCE)
+
+
+def get_global_mafia_event_chance(db_path: str) -> float:
+    override = get_civil_war_chance_override(db_path, GLOBAL_MAFIA_EVENT_KEY)
+    if override is not None:
+        return normalize_chance(override)
+    return get_env_chance("CIVIL_WAR_MAFIA_EVENT_CHANCE", DEFAULT_MAFIA_EVENT_CHANCE)
+
+
+def get_global_rat_event_chance(db_path: str) -> float:
+    override = get_civil_war_chance_override(db_path, GLOBAL_RAT_EVENT_KEY)
+    if override is not None:
+        return normalize_chance(override)
+    return get_env_chance("CIVIL_WAR_RAT_EVENT_CHANCE", DEFAULT_RAT_EVENT_CHANCE)

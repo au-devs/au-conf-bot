@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import db.database as db
+from models.user_manager import create_user
 
 telegram_module = types.ModuleType('telegram')
 telegram_ext_module = types.ModuleType('telegram.ext')
@@ -42,7 +43,19 @@ class TestCivilWarSeasons(unittest.IsolatedAsyncioTestCase):
             effective_message=SimpleNamespace(text=text, reply_text=AsyncMock()),
         )
 
+    def add_verified_user(self, user_id: int, username: str):
+        db.add_user(self.db_path, create_user({
+            'user_id': user_id,
+            'name': username.lstrip('@'),
+            'tg_username': username,
+            'birthday': '01.01.2000',
+            'wishlist_url': 'https://example.com',
+            'money_gifts': True,
+            'funny_gifts': True,
+        }))
+
     async def test_save_season_with_args(self):
+        self.add_verified_user(1, '@winner')
         db.update_civil_war_stats(self.db_path, 1, True, '@winner')
         update = self.build_update('/save_civil_war_season First')
         context = SimpleNamespace(args=['First'], user_data={})
@@ -56,6 +69,7 @@ class TestCivilWarSeasons(unittest.IsolatedAsyncioTestCase):
         update.effective_message.reply_text.assert_awaited_once()
 
     async def test_save_season_dialog(self):
+        self.add_verified_user(1, '@winner')
         db.update_civil_war_stats(self.db_path, 1, True, '@winner')
         update = self.build_update('/save_civil_war_season')
         context = SimpleNamespace(args=[], user_data={})
@@ -75,6 +89,7 @@ class TestCivilWarSeasons(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(SEASON_STATE, context.user_data)
 
     async def test_list_and_show_season(self):
+        self.add_verified_user(1, '@winner')
         db.update_civil_war_stats(self.db_path, 1, True, '@winner')
         leaderboard = db.get_civil_war_leaderboard(self.db_path)
         season_id = db.create_civil_war_season(self.db_path, 'First', leaderboard)
@@ -90,6 +105,7 @@ class TestCivilWarSeasons(unittest.IsolatedAsyncioTestCase):
         self.assertIn('@winner', stats_update.effective_message.reply_text.await_args.args[0])
 
     async def test_start_season_saves_snapshot_and_resets_current_stats(self):
+        self.add_verified_user(1, '@winner')
         db.update_civil_war_stats(self.db_path, 1, True, '@winner')
         update = self.build_update('/start_civil_war_season First')
         context = SimpleNamespace(args=['First'], user_data={})
@@ -104,6 +120,7 @@ class TestCivilWarSeasons(unittest.IsolatedAsyncioTestCase):
         self.assertIn('Новый сезон начат', update.effective_message.reply_text.await_args.args[0])
 
     async def test_start_season_dialog(self):
+        self.add_verified_user(1, '@winner')
         db.update_civil_war_stats(self.db_path, 1, True, '@winner')
         update = self.build_update('/start_civil_war_season')
         context = SimpleNamespace(args=[], user_data={})

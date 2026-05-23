@@ -5,22 +5,28 @@ from telegram.ext import ContextTypes
 
 from db.database import delete_civil_war_chance_overrides, get_civil_war_chance_overrides, upsert_civil_war_chance_override
 from handlers.admin_checker import is_admin
-from handlers.civil_war_chances import GLOBAL_RARE_KEY, GLOBAL_SUCCESS_KEY, format_chance, get_global_rare_chance, \
-    get_global_success_chance, parse_chance
+from handlers.civil_war_chances import GLOBAL_MAFIA_EVENT_KEY, GLOBAL_RARE_KEY, GLOBAL_RARE_LOSS_KEY, \
+    GLOBAL_RAT_EVENT_KEY, GLOBAL_SUCCESS_KEY, format_chance, get_global_mafia_event_chance, get_global_rare_chance, \
+    get_global_rare_loss_chance, get_global_rat_event_chance, get_global_success_chance, parse_chance
 
 
 ADMIN_CONFIG_STATE = "CIVIL_WAR_ADMIN_CONFIG"
 HELP_TEXT = """Скрытые админские команды гражданки:
-/civil_war_config - показать текущие override
-/set_civil_war_chance <chance> - общий шанс победы
-/set_rare_civil_war_chance <chance> - общий шанс rare
-/reset_civil_war_chances - сбросить runtime override до env/default
+/civil_war_config - меню настройки шансов гражданки
 /save_civil_war_season <name> - сохранить текущий лидерборд как сезон
 /start_civil_war_season <name> - сохранить текущий сезон и начать новый
 /civil_war_seasons - список сезонов
 /civil_war_season_stats <season_id|name> - статистика сезона
 
 chance можно писать как 0.0666, 6.66 или 6.66%."""
+
+CHANCE_CONFIGS = [
+    ("1", GLOBAL_SUCCESS_KEY, "обычная победа", get_global_success_chance),
+    ("2", GLOBAL_RARE_KEY, "редкая победа", get_global_rare_chance),
+    ("3", GLOBAL_RARE_LOSS_KEY, "редкое поражение", get_global_rare_loss_chance),
+    ("4", GLOBAL_MAFIA_EVENT_KEY, "мафиозный ивент", get_global_mafia_event_chance),
+    ("5", GLOBAL_RAT_EVENT_KEY, "крысиный ивент", get_global_rat_event_chance),
+]
 
 
 def _is_private_admin(update: Update) -> bool:
@@ -52,6 +58,18 @@ def _format_overrides(overrides: dict[str, float]) -> str:
     return "\n".join(lines)
 
 
+def _format_config_menu(db_path: str) -> str:
+    lines = ["Выбери шанс для изменения:"]
+    for number, _, label, getter in CHANCE_CONFIGS:
+        lines.append(f"{number}. {label}: {format_chance(getter(db_path))}")
+    lines.extend([
+        "6. Сбросить runtime override до env/default",
+        "",
+        _format_overrides(get_civil_war_chance_overrides(db_path)),
+    ])
+    return "\n".join(lines)
+
+
 async def help_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not await _reply_private_admin_only(update):
         return
@@ -62,12 +80,8 @@ async def civil_war_config(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if not await _reply_private_admin_only(update):
         return
     db_path = os.getenv("DB_PATH")
-    overrides = get_civil_war_chance_overrides(db_path)
-    await update.effective_message.reply_text(
-        f"Текущий общий шанс победы: {format_chance(get_global_success_chance(db_path))}\n"
-        f"Текущий общий шанс rare: {format_chance(get_global_rare_chance(db_path))}\n\n"
-        f"{_format_overrides(overrides)}"
-    )
+    context.user_data[ADMIN_CONFIG_STATE] = {"action": "select_key"}
+    await update.effective_message.reply_text(_format_config_menu(db_path))
 
 
 async def _set_global_chance(update: Update, context: ContextTypes.DEFAULT_TYPE, key: str, label: str) -> None:
@@ -114,6 +128,20 @@ async def process_admin_config_response(update: Update, context: ContextTypes.DE
     text = (message.text or "").strip()
     db_path = os.getenv("DB_PATH")
     try:
+        if state["action"] == "select_key":
+            if text == "6" or text.lower() == "reset":
+                delete_civil_war_chance_overrides(db_path)
+                await message.reply_text("Runtime override сброшены. Теперь используются env/default.")
+                context.user_data.pop(ADMIN_CONFIG_STATE, None)
+                return True
+            selected = next((item for item in CHANCE_CONFIGS if item[0] == text or item[1] == text), None)
+            if selected is None:
+                await message.reply_text("Выбери номер 1-6.")
+                return True
+            _, key, label, _ = selected
+            context.user_data[ADMIN_CONFIG_STATE] = {"action": "set_global", "key": key, "label": label}
+            await message.reply_text(f"Введи шанс для '{label}', например 6.66% или 0.0666.")
+            return True
         if state["action"] == "set_global":
             chance = parse_chance(text)
             upsert_civil_war_chance_override(db_path, state["key"], chance)

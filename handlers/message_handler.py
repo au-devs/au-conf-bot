@@ -11,6 +11,7 @@ from db.database import get_db_users, update_username
 from handlers.birthday_reminders import process_birthday_reminders
 from handlers.civil_war_admin_config import process_admin_config_response
 from handlers.civil_war import civil_war, civil_war_stats, is_civil_war_trigger, is_civil_war_stats_trigger
+from handlers.civil_war_season2 import process_season2_private_response
 from handlers.civil_war_seasons import process_season_response
 from handlers.global_stats import register_stats_chat
 from handlers.quiz import QUIZ_TRANSITIONS, edit_user_data, process_quiz
@@ -29,6 +30,9 @@ async def message_handler(update: Update, context: ContextTypes) -> None:
         return
 
     if await process_season_response(update, context):
+        return
+
+    if await process_season2_private_response(update, context):
         return
 
     if is_civil_war_stats_trigger(update.effective_message.text if update.effective_message else None):

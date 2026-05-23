@@ -38,7 +38,7 @@ def build_update(thread_id: int = 42):
 
 
 def build_context():
-    return SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock(), send_photo=AsyncMock()))
+    return SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock(), send_photo=AsyncMock(), send_animation=AsyncMock()))
 
 
 class TestCivilWarThreading(unittest.IsolatedAsyncioTestCase):
@@ -206,7 +206,7 @@ class TestCivilWarThreading(unittest.IsolatedAsyncioTestCase):
                     patch('handlers.civil_war.get_civil_war_last_used_at', return_value=None), \
                     patch('handlers.civil_war.upsert_civil_war_last_used_at'), \
                     patch('handlers.civil_war.random.random', return_value=0.15), \
-                    patch('handlers.civil_war.get_success_image_path', return_value=temp_path):
+                    patch('handlers.civil_war.get_rat_image_path', return_value=temp_path):
                 await civil_war(update, context)
         finally:
             os.unlink(temp_path)
@@ -214,6 +214,23 @@ class TestCivilWarThreading(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(db.get_civil_war_stats(self.db_path, 123), (1, 4))
         self.assertEqual(db.get_rat_points(self.db_path), 1)
         self.assertIn('крысиный банк +3', context.bot.send_photo.await_args.kwargs['caption'])
+
+    async def test_send_gif_uses_animation(self):
+        update = build_update()
+        context = build_context()
+
+        with tempfile.NamedTemporaryFile(suffix='.gif', delete=False) as temp_file:
+            temp_file.write(b'test')
+            temp_path = Path(temp_file.name)
+
+        try:
+            await _send_image(context.bot, update, temp_path)
+        finally:
+            os.unlink(temp_path)
+
+        context.bot.send_animation.assert_awaited_once()
+        context.bot.send_photo.assert_not_awaited()
+        self.assertEqual(context.bot.send_animation.await_args.kwargs['message_thread_id'], 42)
 
     def test_civil_war_dash_command_is_not_trigger(self):
         self.assertFalse(is_civil_war_trigger('/civil-war'))

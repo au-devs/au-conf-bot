@@ -82,6 +82,8 @@ CREATE TABLE IF NOT EXISTS civil_war_rat_pending (
     user_id INTEGER NOT NULL PRIMARY KEY,
     points INTEGER NOT NULL,
     created_at TEXT NOT NULL,
+    source_chat_id INTEGER NULL,
+    source_message_thread_id INTEGER NULL,
     FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
 );
 

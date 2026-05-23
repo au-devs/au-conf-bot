@@ -10,9 +10,10 @@ from telegram.ext import ContextTypes
 
 from db.database import get_civil_war_last_used_at, upsert_civil_war_last_used_at, update_civil_war_stats, \
     get_civil_war_stats, get_rat_points, has_verified_private_chat, set_rat_points
+from handlers.assets import resolve_asset_path, send_asset
 from handlers.civil_war_chances import get_global_mafia_event_chance, get_global_rare_chance, \
     get_global_rare_loss_chance, get_global_rat_event_chance, get_global_success_chance
-from handlers.civil_war_season2 import start_mafia_event, start_rat_event
+from handlers.civil_war_season2 import get_rat_image_path, start_mafia_event, start_rat_event
 
 
 logger = logging.getLogger(__name__)
@@ -47,19 +48,19 @@ def get_assets_dir() -> Path:
 
 
 def get_success_image_path() -> Path:
-    return get_assets_dir() / "civilwar.jpg"
+    return resolve_asset_path(get_assets_dir(), "civilwar")
 
 
 def get_fail_image_path() -> Path:
-    return get_assets_dir() / "fail.jpg"
+    return resolve_asset_path(get_assets_dir(), "fail")
 
 
 def get_rare_image_path() -> Path:
-    return get_assets_dir() / "rare.jpg"
+    return resolve_asset_path(get_assets_dir(), "rare")
 
 
 def get_rare_fail_image_path() -> Path:
-    return get_assets_dir() / "rare_fail.jpg"
+    return resolve_asset_path(get_assets_dir(), "rare_fail")
 
 
 def get_season2_unverified_message() -> str:
@@ -208,19 +209,7 @@ async def _send_image(
     chat_kwargs = _get_chat_kwargs(update, send_to_general=send_to_general)
     if not chat_kwargs:
         return
-    if not image_path.exists():
-        logger.error(f"Image file does not exist: {image_path}")
-        await bot.send_message(text=f"Файл не найден: {image_path.name}", **chat_kwargs)
-        return
-
-    photo_kwargs = dict(chat_kwargs)
-    if caption is not None:
-        photo_kwargs["caption"] = caption
-    if parse_mode is not None:
-        photo_kwargs["parse_mode"] = parse_mode
-
-    with image_path.open("rb") as image:
-        await bot.send_photo(photo=image, **photo_kwargs)
+    await send_asset(bot, image_path, caption=caption, parse_mode=parse_mode, **chat_kwargs)
 
 
 async def civil_war(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -290,7 +279,7 @@ async def civil_war(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         selected_image = get_rare_fail_image_path()
         caption, parse_mode = _get_rare_fail_caption(user)
     else:
-        selected_image = get_success_image_path() if is_success else get_fail_image_path()
+        selected_image = get_rat_image_path() if rat_bonus > 0 else get_success_image_path() if is_success else get_fail_image_path()
         caption, parse_mode = _get_success_caption(user) if is_success else (None, None)
         if is_success and rat_bonus > 0 and caption is not None:
             caption, parse_mode = _append_rat_bonus_caption(caption, parse_mode, rat_bonus)

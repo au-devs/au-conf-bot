@@ -152,10 +152,18 @@ def ensure_civil_war_season2_tables(conn: sqlite3.Connection) -> None:
             user_id INTEGER NOT NULL PRIMARY KEY,
             points INTEGER NOT NULL,
             created_at TEXT NOT NULL,
+            source_chat_id INTEGER NULL,
+            source_message_thread_id INTEGER NULL,
             FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
         )
         """
     )
+    cursor.execute("PRAGMA table_info(civil_war_rat_pending)")
+    columns = {row[1] for row in cursor.fetchall()}
+    if 'source_chat_id' not in columns:
+        cursor.execute("ALTER TABLE civil_war_rat_pending ADD COLUMN source_chat_id INTEGER NULL")
+    if 'source_message_thread_id' not in columns:
+        cursor.execute("ALTER TABLE civil_war_rat_pending ADD COLUMN source_message_thread_id INTEGER NULL")
 
 
 def get_db_tables(db_path: str) -> list:
@@ -1097,7 +1105,14 @@ def set_rat_points(db_path: str, points: int, updated_at: datetime | None = None
         logger.error(f"Error setting rat points in database at {db_path}: {str(e)}")
 
 
-def create_rat_pending(db_path: str, user_id: int, points: int, created_at: datetime | None = None) -> None:
+def create_rat_pending(
+        db_path: str,
+        user_id: int,
+        points: int,
+        created_at: datetime | None = None,
+        source_chat_id: int | None = None,
+        source_message_thread_id: int | None = None,
+) -> None:
     logger.info(f"Creating rat pending action for user_id={user_id} in database at {db_path}")
     try:
         with sqlite3.connect(db_path) as conn:
@@ -1105,29 +1120,60 @@ def create_rat_pending(db_path: str, user_id: int, points: int, created_at: date
             cursor = conn.cursor()
             cursor.execute(
                 """
-                INSERT INTO civil_war_rat_pending (user_id, points, created_at)
-                VALUES (?, ?, ?)
-                ON CONFLICT(user_id) DO UPDATE SET points = excluded.points, created_at = excluded.created_at
+                INSERT INTO civil_war_rat_pending (
+                    user_id, points, created_at, source_chat_id, source_message_thread_id
+                )
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    points = excluded.points,
+                    created_at = excluded.created_at,
+                    source_chat_id = excluded.source_chat_id,
+                    source_message_thread_id = excluded.source_message_thread_id
                 """,
-                (user_id, max(int(points), 1), (created_at or datetime.now()).isoformat()),
+                (
+                    user_id,
+                    max(int(points), 1),
+                    (created_at or datetime.now()).isoformat(),
+                    source_chat_id,
+                    source_message_thread_id,
+                ),
             )
             conn.commit()
     except Exception as e:
         logger.error(f"Error creating rat pending action for user_id={user_id} in database at {db_path}: {str(e)}")
 
 
-def get_rat_pending_points(db_path: str, user_id: int) -> int | None:
+def get_rat_pending(db_path: str, user_id: int) -> tuple[int, int | None, int | None] | None:
     logger.info(f"Fetching rat pending action for user_id={user_id} in database at {db_path}")
     try:
         with sqlite3.connect(db_path) as conn:
             ensure_civil_war_season2_tables(conn)
             cursor = conn.cursor()
-            cursor.execute("SELECT points FROM civil_war_rat_pending WHERE user_id = ?", (user_id,))
+            cursor.execute(
+                """
+                SELECT points, source_chat_id, source_message_thread_id
+                FROM civil_war_rat_pending
+                WHERE user_id = ?
+                """,
+                (user_id,),
+            )
             row = cursor.fetchone()
-            return None if row is None else max(int(row[0]), 1)
+            if row is None:
+                return None
+            return (
+                max(int(row[0]), 1),
+                None if row[1] is None else int(row[1]),
+                None if row[2] is None else int(row[2]),
+            )
     except Exception as e:
         logger.error(f"Error fetching rat pending action for user_id={user_id} in database at {db_path}: {str(e)}")
         return None
+
+
+def get_rat_pending_points(db_path: str, user_id: int) -> int | None:
+    logger.info(f"Fetching rat pending action for user_id={user_id} in database at {db_path}")
+    pending = get_rat_pending(db_path, user_id)
+    return None if pending is None else pending[0]
 
 
 def delete_rat_pending(db_path: str, user_id: int) -> None:

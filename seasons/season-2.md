@@ -44,9 +44,13 @@ All chances can be overridden at runtime by the admin via `/civil_war_config` in
 
 Rare loss sends `rare_fail.jpg` from `ASSETS_DIR`.
 
+All assets can use `.jpg`, `.jpeg`, `.png`, `.webp`, or `.gif`. GIF assets are sent as Telegram animations.
+
 ## Mafia Event
 
 When the mafia event drops for a verified user, the bot sends a private message to that user.
+
+The private choice message uses `mafia.jpg` from `ASSETS_DIR`.
 
 The user chooses one action:
 
@@ -69,6 +73,8 @@ Damage is clamped at zero total wins.
 
 When the rat event drops for a verified user, the bot sends a private message to that user.
 
+The private choice message uses `rat_choice.jpg` from `ASSETS_DIR`.
+
 The user chooses one action:
 
 - Take the current rat bank immediately.
@@ -79,7 +85,7 @@ The rat bank starts at `1`.
 If the user takes the bank:
 
 - The user receives the current rat bank as wins.
-- The bot sends `rat.jpg` from `ASSETS_DIR`.
+- The bot sends `rat.jpg` from `ASSETS_DIR` to the source chat where the rat event was rolled.
 - Caption is controlled by `RAT_CIVIL_WAR_CAPTION_TEMPLATE`.
 - The rat bank resets to `1`.
 
@@ -87,6 +93,7 @@ If the user passes the bank:
 
 - The rat bank increases by `2`.
 - The next normal win receives the accumulated rat bank bonus.
+- If a normal win receives the accumulated rat bank bonus, the bot sends `rat.jpg` instead of `civilwar.jpg`.
 - After a normal win takes the rat bank, it resets to `1`.
 
 ## Stats

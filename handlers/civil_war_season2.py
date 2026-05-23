@@ -6,7 +6,8 @@ from telegram.ext import ContextTypes
 
 from db.database import add_mafia_daily_action, adjust_civil_war_successes, create_mafia_pending, create_rat_pending, \
     delete_mafia_pending, delete_rat_pending, find_verified_civil_war_user, get_civil_war_leaderboard, \
-    get_mafia_pending_state, get_rat_pending_points, get_rat_points, set_mafia_pending_state, set_rat_points
+    get_mafia_pending_state, get_rat_pending, get_rat_points, set_mafia_pending_state, set_rat_points
+from handlers.assets import resolve_asset_path, send_asset
 
 
 DEFAULT_RAT_CAPTION_TEMPLATE = "забрал крысиный банк: +{points} винов"
@@ -18,7 +19,27 @@ def get_rat_caption_template() -> str:
 
 
 def get_rat_image_path() -> Path:
-    return Path(os.getenv("ASSETS_DIR", str(DEFAULT_ASSETS_DIR))) / "rat.jpg"
+    return resolve_asset_path(Path(os.getenv("ASSETS_DIR", str(DEFAULT_ASSETS_DIR))), "rat")
+
+
+def get_mafia_image_path() -> Path:
+    return resolve_asset_path(Path(os.getenv("ASSETS_DIR", str(DEFAULT_ASSETS_DIR))), "mafia")
+
+
+def get_rat_choice_image_path() -> Path:
+    return resolve_asset_path(Path(os.getenv("ASSETS_DIR", str(DEFAULT_ASSETS_DIR))), "rat_choice")
+
+
+async def send_private_choice(bot, user_id: int, image_path: Path, text: str) -> None:
+    await send_asset(bot, image_path, fallback_name=image_path.name, chat_id=user_id, caption=text)
+
+
+def get_source_chat_kwargs(update: Update) -> tuple[int | None, int | None]:
+    chat = update.effective_chat
+    message = update.effective_message
+    if chat is None:
+        return None, None
+    return chat.id, getattr(message, "message_thread_id", None)
 
 
 def format_private_leaderboard(db_path: str, actor_user_id: int) -> str:
@@ -48,9 +69,11 @@ async def start_mafia_event(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         return False
     create_mafia_pending(db_path, user.id)
     try:
-        await context.bot.send_message(
-            chat_id=user.id,
-            text=(
+        await send_private_choice(
+            context.bot,
+            user.id,
+            get_mafia_image_path(),
+            (
                 "Тебе выпал мафиозный выбор. Ответь цифрой:\n"
                 "1. -1 вин другому\n"
                 "2. Защита от одного -1"
@@ -67,11 +90,20 @@ async def start_rat_event(update: Update, context: ContextTypes.DEFAULT_TYPE, db
     if user is None:
         return False
     points = get_rat_points(db_path)
-    create_rat_pending(db_path, user.id, points)
+    source_chat_id, source_message_thread_id = get_source_chat_kwargs(update)
+    create_rat_pending(
+        db_path,
+        user.id,
+        points,
+        source_chat_id=source_chat_id,
+        source_message_thread_id=source_message_thread_id,
+    )
     try:
-        await context.bot.send_message(
-            chat_id=user.id,
-            text=(
+        await send_private_choice(
+            context.bot,
+            user.id,
+            get_rat_choice_image_path(),
+            (
                 f"Тебе выпала крыса. В банке {points} винов. Ответь цифрой:\n"
                 f"1. Забрать +{points} сейчас\n"
                 f"2. Передать дальше, банк станет {points + 2}"
@@ -93,19 +125,22 @@ async def process_season2_private_response(update: Update, context: ContextTypes
     text = (message.text or "").strip()
     db_path = os.getenv("DB_PATH")
 
-    rat_points = get_rat_pending_points(db_path, user.id)
-    if rat_points is not None:
+    rat_pending = get_rat_pending(db_path, user.id)
+    if rat_pending is not None:
+        rat_points, source_chat_id, source_message_thread_id = rat_pending
         if text == "1":
             adjust_civil_war_successes(db_path, user.id, rat_points)
             set_rat_points(db_path, 1)
             delete_rat_pending(db_path, user.id)
             image_path = get_rat_image_path()
             caption = get_rat_caption_template().format(points=rat_points)
-            if image_path.exists():
-                with image_path.open("rb") as image:
-                    await context.bot.send_photo(chat_id=user.id, photo=image, caption=caption)
+            if source_chat_id is None:
+                await send_asset(context.bot, image_path, fallback_name=image_path.name, chat_id=user.id, caption=caption)
             else:
-                await message.reply_text(f"{caption}\nФайл не найден: {image_path.name}")
+                chat_kwargs = {"chat_id": source_chat_id}
+                if source_message_thread_id is not None:
+                    chat_kwargs["message_thread_id"] = source_message_thread_id
+                await send_asset(context.bot, image_path, fallback_name=image_path.name, caption=caption, **chat_kwargs)
             return True
         if text == "2":
             set_rat_points(db_path, rat_points + 2)

@@ -25,7 +25,20 @@ fail.jpg
 rare.jpg
 rare_fail.jpg
 rat.jpg
+mafia.jpg
+rat_choice.jpg
 ```
+
+Asset formats:
+```bash
+.jpg
+.jpeg
+.png
+.webp
+.gif
+```
+
+The bot resolves assets by basename. For example, `rare.gif` can be used instead of `rare.jpg`.
 
 Daily stats schedule:
 ```bash

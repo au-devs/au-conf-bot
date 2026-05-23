@@ -23,12 +23,23 @@ def get_rat_image_path() -> Path:
 
 def format_private_leaderboard(db_path: str, actor_user_id: int) -> str:
     leaderboard = get_civil_war_leaderboard(db_path)
-    lines = ["Кого минусуем? Отправь username или user_id из списка:"]
-    for place, (user_id, display_name, attempts, successes, _, _) in enumerate(leaderboard, start=1):
-        if user_id == actor_user_id:
-            continue
+    lines = ["Кого минусуем? Отправь номер из списка:"]
+    targets = [row for row in leaderboard if row[0] != actor_user_id]
+    for place, (user_id, display_name, attempts, successes, _, _) in enumerate(targets, start=1):
         lines.append(f"{place}. {display_name} ({user_id}) | {successes}/{attempts}")
     return "\n".join(lines)
+
+
+def find_mafia_target(db_path: str, actor_user_id: int, text: str) -> tuple[int, str] | None:
+    normalized = text.strip()
+    if normalized.isdigit():
+        target_index = int(normalized) - 1
+        leaderboard = get_civil_war_leaderboard(db_path)
+        targets = [row for row in leaderboard if row[0] != actor_user_id]
+        if 0 <= target_index < len(targets):
+            user_id, display_name, *_ = targets[target_index]
+            return user_id, display_name
+    return find_verified_civil_war_user(db_path, normalized)
 
 
 async def start_mafia_event(update: Update, context: ContextTypes.DEFAULT_TYPE, db_path: str) -> bool:
@@ -122,9 +133,9 @@ async def process_season2_private_response(update: Update, context: ContextTypes
         return True
 
     if mafia_state == "target":
-        target = find_verified_civil_war_user(db_path, text)
+        target = find_mafia_target(db_path, user.id, text)
         if target is None:
-            await message.reply_text("Не нашел такого пользователя в верифицированном лидерборде. Отправь username или user_id из списка.")
+            await message.reply_text("Не нашел такого пользователя. Отправь номер из списка.")
             return True
         target_user_id, target_display_name = target
         if target_user_id == user.id:

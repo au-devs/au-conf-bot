@@ -68,6 +68,35 @@ def ensure_civil_war_chance_overrides_table(conn: sqlite3.Connection) -> None:
     )
 
 
+def ensure_civil_war_seasons_tables(conn: sqlite3.Connection) -> None:
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS civil_war_seasons (
+            season_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+            name VARCHAR(255) NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS civil_war_season_entries (
+            season_id INTEGER NOT NULL,
+            place INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            display_name VARCHAR(255) NOT NULL,
+            attempts INTEGER NOT NULL,
+            successes INTEGER NOT NULL,
+            winrate REAL NOT NULL,
+            adjusted_winrate REAL NOT NULL,
+            PRIMARY KEY (season_id, place),
+            FOREIGN KEY (season_id) REFERENCES civil_war_seasons (season_id) ON DELETE CASCADE
+        )
+        """
+    )
+
+
 def get_db_tables(db_path: str) -> list:
     logger.info(f"Fetching tables from database at {db_path}")
     tables = []
@@ -400,6 +429,18 @@ def update_civil_war_stats(
         logger.error(f"Error updating civil war stats for user_id={user_id} in database at {db_path}: {str(e)}")
 
 
+def clear_civil_war_stats(db_path: str) -> None:
+    logger.info(f"Clearing civil war stats in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_stats_table(conn)
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM civil_war_stats")
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error clearing civil war stats in database at {db_path}: {str(e)}")
+
+
 def get_civil_war_stats_without_display_names(db_path: str) -> list[int]:
     logger.info(f"Fetching civil war stats rows without display_name from database at {db_path}")
     try:
@@ -630,6 +671,95 @@ def get_civil_war_lowest_winrate(
             return int(row[0]), str(row[1]), int(row[2]), int(row[3]), float(row[4]), float(row[5])
     except Exception as e:
         logger.error(f"Error fetching lowest civil war winrate from database at {db_path}: {str(e)}")
+        return None
+
+
+def create_civil_war_season(
+        db_path: str,
+        name: str,
+        leaderboard: list[tuple[int, str, int, int, float, float]],
+        created_at: datetime | None = None,
+) -> int | None:
+    logger.info(f"Creating civil war season {name!r} in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_seasons_tables(conn)
+            cursor = conn.cursor()
+            saved_at = created_at or datetime.now()
+            cursor.execute(
+                "INSERT INTO civil_war_seasons (name, created_at) VALUES (?, ?)",
+                (name, saved_at.isoformat()),
+            )
+            season_id = int(cursor.lastrowid)
+            cursor.executemany(
+                """
+                INSERT INTO civil_war_season_entries (
+                    season_id, place, user_id, display_name, attempts, successes, winrate, adjusted_winrate
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (season_id, place, user_id, display_name, attempts, successes, winrate, adjusted_winrate)
+                    for place, (user_id, display_name, attempts, successes, winrate, adjusted_winrate)
+                    in enumerate(leaderboard, start=1)
+                ],
+            )
+            conn.commit()
+            return season_id
+    except Exception as e:
+        logger.error(f"Error creating civil war season {name!r} in database at {db_path}: {str(e)}")
+        return None
+
+
+def get_civil_war_seasons(db_path: str) -> list[tuple[int, str, datetime]]:
+    logger.info(f"Fetching civil war seasons from database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_seasons_tables(conn)
+            cursor = conn.cursor()
+            cursor.execute("SELECT season_id, name, created_at FROM civil_war_seasons ORDER BY season_id DESC")
+            return [(int(row[0]), str(row[1]), datetime.fromisoformat(row[2])) for row in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"Error fetching civil war seasons from database at {db_path}: {str(e)}")
+        return []
+
+
+def get_civil_war_season_entries(db_path: str, season_ref: str) -> tuple[int, str, datetime, list[tuple[int, int, str, int, int, float, float]]] | None:
+    logger.info(f"Fetching civil war season {season_ref!r} from database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_seasons_tables(conn)
+            cursor = conn.cursor()
+            if season_ref.isdigit():
+                cursor.execute(
+                    "SELECT season_id, name, created_at FROM civil_war_seasons WHERE season_id = ?",
+                    (int(season_ref),),
+                )
+            else:
+                cursor.execute(
+                    "SELECT season_id, name, created_at FROM civil_war_seasons WHERE name = ? ORDER BY season_id DESC LIMIT 1",
+                    (season_ref,),
+                )
+            season = cursor.fetchone()
+            if season is None:
+                return None
+            season_id = int(season[0])
+            cursor.execute(
+                """
+                SELECT place, user_id, display_name, attempts, successes, winrate, adjusted_winrate
+                FROM civil_war_season_entries
+                WHERE season_id = ?
+                ORDER BY place
+                """,
+                (season_id,),
+            )
+            entries = [
+                (int(row[0]), int(row[1]), str(row[2]), int(row[3]), int(row[4]), float(row[5]), float(row[6]))
+                for row in cursor.fetchall()
+            ]
+            return season_id, str(season[1]), datetime.fromisoformat(season[2]), entries
+    except Exception as e:
+        logger.error(f"Error fetching civil war season {season_ref!r} from database at {db_path}: {str(e)}")
         return None
 
 

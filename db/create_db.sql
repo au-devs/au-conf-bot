@@ -47,3 +47,22 @@ CREATE TABLE IF NOT EXISTS civil_war_chance_overrides (
     config_key VARCHAR(255) NOT NULL PRIMARY KEY,
     chance REAL NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS civil_war_seasons (
+    season_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    name VARCHAR(255) NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS civil_war_season_entries (
+    season_id INTEGER NOT NULL,
+    place INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    display_name VARCHAR(255) NOT NULL,
+    attempts INTEGER NOT NULL,
+    successes INTEGER NOT NULL,
+    winrate REAL NOT NULL,
+    adjusted_winrate REAL NOT NULL,
+    PRIMARY KEY (season_id, place),
+    FOREIGN KEY (season_id) REFERENCES civil_war_seasons (season_id) ON DELETE CASCADE
+);

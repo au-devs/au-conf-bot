@@ -12,6 +12,8 @@ from handlers.add_user import add_user
 from handlers.civil_war_admin_config import civil_war_config, help_admin, reset_civil_war_chances, \
     set_civil_war_chance, set_rare_civil_war_chance
 from handlers.civil_war import civil_war, civil_war_stats, get_assets_dir
+from handlers.civil_war_seasons import civil_war_season_stats, civil_war_seasons, save_civil_war_season, \
+    start_civil_war_season
 from handlers.global_stats import send_daily_stats, stats
 from handlers.remove_user import remove_user_handler
 from handlers.user_info import user_info
@@ -74,6 +76,10 @@ def main() -> None:
     application.add_handler(CommandHandler("set_civil_war_chance", set_civil_war_chance))
     application.add_handler(CommandHandler("set_rare_civil_war_chance", set_rare_civil_war_chance))
     application.add_handler(CommandHandler("reset_civil_war_chances", reset_civil_war_chances))
+    application.add_handler(CommandHandler("save_civil_war_season", save_civil_war_season))
+    application.add_handler(CommandHandler("start_civil_war_season", start_civil_war_season))
+    application.add_handler(CommandHandler("civil_war_seasons", civil_war_seasons))
+    application.add_handler(CommandHandler("civil_war_season_stats", civil_war_season_stats))
     application.add_handler(MessageHandler(filters.Regex(r"^/help-admin(?:\s|$)"), help_admin))
     if application.job_queue is None:
         logger.error("JobQueue is not available. Install python-telegram-bot[job-queue] to enable daily stats.")

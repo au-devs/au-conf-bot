@@ -63,6 +63,14 @@ class TestDatabase(unittest.TestCase):
         self.assertEqual(attempts, 3)
         self.assertEqual(successes, 1)
 
+    def test_clear_civil_war_stats(self):
+        db.update_civil_war_stats(self.db_path, 12345, True)
+
+        db.clear_civil_war_stats(self.db_path)
+
+        self.assertEqual(db.get_civil_war_stats(self.db_path, 12345), (0, 0))
+        self.assertEqual(db.get_civil_war_leaderboard(self.db_path), [])
+
     def test_civil_war_chance_override_persistence(self):
         db.upsert_civil_war_chance_override(self.db_path, 'global_rare', 0.42)
 
@@ -196,6 +204,22 @@ class TestDatabase(unittest.TestCase):
         self.assertEqual(lowest_winrate[1], '@missing_user')
         self.assertEqual(lowest_winrate[2], 1)
         self.assertEqual(lowest_winrate[3], 0)
+
+    def test_civil_war_season_snapshot(self):
+        db.update_civil_war_stats(self.db_path, 1, True, '@winner')
+        db.update_civil_war_stats(self.db_path, 2, False, '@loser')
+        leaderboard = db.get_civil_war_leaderboard(self.db_path)
+
+        season_id = db.create_civil_war_season(self.db_path, 'Season One', leaderboard)
+
+        seasons = db.get_civil_war_seasons(self.db_path)
+        season = db.get_civil_war_season_entries(self.db_path, str(season_id))
+        self.assertEqual(seasons[0][0], season_id)
+        self.assertEqual(seasons[0][1], 'Season One')
+        self.assertEqual(season[0], season_id)
+        self.assertEqual(season[1], 'Season One')
+        self.assertEqual(len(season[3]), 2)
+        self.assertEqual(season[3][0][2], '@winner')
 
     def test_command_cooldown_persistence(self):
         last_used_at = datetime(2026, 5, 15, 12, 0, 0)

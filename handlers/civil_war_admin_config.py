@@ -15,6 +15,10 @@ HELP_TEXT = """Скрытые админские команды гражданк
 /set_civil_war_chance <chance> - общий шанс победы
 /set_rare_civil_war_chance <chance> - общий шанс rare
 /reset_civil_war_chances - сбросить runtime override до env/default
+/save_civil_war_season <name> - сохранить текущий лидерборд как сезон
+/start_civil_war_season <name> - сохранить текущий сезон и начать новый
+/civil_war_seasons - список сезонов
+/civil_war_season_stats <season_id|name> - статистика сезона
 
 chance можно писать как 0.0666, 6.66 или 6.66%."""
 

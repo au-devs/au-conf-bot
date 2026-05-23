@@ -1,112 +1,133 @@
-# Season 2: Mafia Civil War
+# Сезон 2: Мафия
 
-## Eligibility
+## Допуск к сезону
 
-Only verified users participate in Season 2 leaderboard and private seasonal events.
+В рейтинге второго сезона и в приватных сезонных событиях участвуют только верифицированные пользователи.
 
-A verified user must satisfy both conditions:
+Пользователь считается верифицированным, если выполнены оба условия:
 
-- The user exists in the `users` table.
-- The user has sent `/start` to the bot in private chat.
+- Пользователь есть в таблице `users`.
+- Пользователь отправлял `/start` боту в личный чат.
 
-If a seasonal private event drops for a non-verified user, the event is burned and the bot explicitly says that the user has not sent `/start` to the bot in private chat or has not filled the profile.
+Если приватный сезонный ивент выпал неверифицированному пользователю, ивент сгорает. Бот явно пишет, что пользователь не отправил `/start` боту в личку или не заполнил профиль.
 
-## Standard Events
+## Бросок гражданской войны
 
-Each civil war roll has a cooldown controlled by `CIVIL_WAR_COOLDOWN_HOURS`.
+Каждый запуск гражданской войны ограничен cooldown-ом из `CIVIL_WAR_COOLDOWN_HOURS`.
 
-Roll priority:
+Порядок проверки исходов:
 
-1. Rare win
-2. Rare loss
-3. Mafia event
-4. Rat event
-5. Normal win
-6. Loss
+1. Редкая победа
+2. Редкое поражение
+3. Мафиозный ивент
+4. Крысиный ивент
+5. Обычная победа
+6. Поражение
 
-Events:
+Стандартные исходы:
 
-- Normal win: `+1` win.
-- Rare win: `+10` wins.
-- Loss: `0` wins.
-- Rare loss: `-1` win, clamped at zero total wins.
+- Обычная победа: `+1` вин.
+- Редкая победа: `+10` винов.
+- Поражение: `0` винов.
+- Редкое поражение: `-1` вин, но итоговое количество винов не может уйти ниже нуля.
 
-Default chances:
+Дефолтные шансы:
 
 - `CIVIL_WAR_SUCCESS_CHANCE=0.0666`
 - `CIVIL_WAR_RARE_SUCCESS_CHANCE=0.00666`
 - `CIVIL_WAR_RARE_LOSS_CHANCE=0.0133`
 - `CIVIL_WAR_MAFIA_EVENT_CHANCE=0.0888`
 - `CIVIL_WAR_RAT_EVENT_CHANCE=0.015`
+
+Подписи:
+
+- `RARE_CIVIL_WAR_CAPTION_TEMPLATE=налудил себе +10 винов`
 - `RARE_FAIL_CIVIL_WAR_CAPTION_TEMPLATE=словил редкое поражение: -1 вин`
+- `RAT_CIVIL_WAR_CAPTION_TEMPLATE=забрал крысиный банк: +{points} винов`
 
-All chances can be overridden at runtime by the admin via `/civil_war_config` in private chat.
+Все шансы можно менять во время работы через админскую команду `/civil_war_config` в личке с ботом.
 
-Rare loss sends `rare_fail.jpg` from `ASSETS_DIR`.
+## Ассеты
 
-All assets can use `.jpg`, `.jpeg`, `.png`, `.webp`, or `.gif`. GIF assets are sent as Telegram animations.
+Все ассеты берутся из `ASSETS_DIR`.
 
-## Mafia Event
+Бот ищет файл по basename и поддерживает расширения:
 
-When the mafia event drops for a verified user, the bot sends a private message to that user.
+- `.jpg`
+- `.jpeg`
+- `.png`
+- `.webp`
+- `.gif`
 
-The private choice message uses `mafia.jpg` from `ASSETS_DIR`.
+Если ассет имеет расширение `.gif`, бот отправляет его как Telegram animation. Остальные форматы отправляются как photo.
 
-The user chooses one action:
+Ожидаемые ассеты:
 
-- Attack another verified leaderboard participant: target receives pending `-1` win.
-- Protect themselves: protection blocks one pending `-1` win against that user.
+- `civilwar.*` - отправляется в общий чат при обычной победе, если победитель не забирает накопленный крысиный банк.
+- `fail.*` - отправляется в чат вызова при обычном поражении, сгоревшем сезонном ивенте или техническом fallback-е.
+- `rare.*` - отправляется в общий чат при редкой победе `+10`.
+- `rare_fail.*` - отправляется в чат вызова при редком поражении `-1`.
+- `mafia.*` - отправляется пользователю в личку при выпадении мафиозного ивента, вместе с выбором действия.
+- `rat_choice.*` - отправляется пользователю в личку при выпадении крысиного ивента, вместе с выбором действия.
+- `rat.*` - отправляется в исходный чат/топик, когда пользователь забирает крысиный банк. Также отправляется вместо `civilwar.*`, если накопленный крысиный банк забирается следующей обычной победой.
 
-Attack target selection is private. The bot sends the current verified leaderboard to the user, and the user replies with target username or user id.
+## Мафиозный ивент
 
-Mafia attacks and protections are not applied immediately. They are stored until the next `/stats` run or scheduled daily stats run.
+Когда мафиозный ивент выпадает верифицированному пользователю, бот отправляет ему личное сообщение с ассетом `mafia.*`.
 
-At stats time:
+Пользователь выбирает одно действие:
 
-- If nobody receives damage, append: `Город просыпается, сегодня никто не умер`
-- If users receive damage, append: `Город просыпается, но [список пользователей] нежданули на -N вин`
-- If protection reduces or blocks damage, the stats message explicitly mentions the protected user and the reduced or blocked damage.
+- Атаковать другого участника рейтинга: цель получает отложенный `-1` вин.
+- Защитить себя: защита блокирует один отложенный `-1` вин по этому пользователю.
 
-Damage is clamped at zero total wins.
+Выбор цели приватный. Бот отправляет пользователю текущий верифицированный лидерборд, пользователь отвечает номером из списка. Username/user_id также поддерживаются как fallback.
 
-## Rat Event
+Атаки и защиты не применяются сразу. Они копятся до следующего `/stats` от админа или до плановой дневной статы.
 
-When the rat event drops for a verified user, the bot sends a private message to that user.
+При формировании статы:
 
-The private choice message uses `rat_choice.jpg` from `ASSETS_DIR`.
+- Если никто не получил урон, добавляется: `Город просыпается, сегодня никто не умер`
+- Если кто-то получил урон, добавляется: `Город просыпается, но [список пользователей] нежданули на -N вин`
+- Если защита уменьшила или полностью заблокировала урон, это явно отражается в сообщении статы.
 
-The user chooses one action:
+Урон не может опустить количество винов ниже нуля.
 
-- Take the current rat bank immediately.
-- Pass the rat bank forward, increasing it by `+2`.
+## Крысиный ивент
 
-The rat bank starts at `1`.
+Когда крысиный ивент выпадает верифицированному пользователю, бот отправляет ему личное сообщение с ассетом `rat_choice.*`.
 
-If the user takes the bank:
+Пользователь выбирает одно действие:
 
-- The user receives the current rat bank as wins.
-- The bot sends `rat.jpg` from `ASSETS_DIR` to the source chat where the rat event was rolled.
-- Caption is controlled by `RAT_CIVIL_WAR_CAPTION_TEMPLATE`.
-- The rat bank resets to `1`.
+- Забрать текущий крысиный банк сразу.
+- Передать крысиный банк дальше, увеличив его на `+2`.
 
-If the user passes the bank:
+Крысиный банк начинается с `1`.
 
-- The rat bank increases by `2`.
-- The next normal win receives the accumulated rat bank bonus.
-- If a normal win receives the accumulated rat bank bonus, the bot sends `rat.jpg` instead of `civilwar.jpg`.
-- After a normal win takes the rat bank, it resets to `1`.
+Если пользователь забирает банк:
 
-## Stats
+- Пользователь получает текущее значение банка в вины.
+- Бот отправляет `rat.*` в исходный чат/топик, где был выбит крысиный ивент.
+- Подпись берется из `RAT_CIVIL_WAR_CAPTION_TEMPLATE`.
+- Крысиный банк сбрасывается до `1`.
 
-`/stats` can be called only by an admin or by the scheduled job.
+Если пользователь передает банк дальше:
 
-Regular users cannot call `/stats`, because mafia attacks and protections must stay hidden until the stats moment.
+- Крысиный банк увеличивается на `2`.
+- Следующая обычная победа получает накопленный бонус банка.
+- При такой обычной победе бот отправляет `rat.*` вместо `civilwar.*`.
+- После получения накопленного банка он сбрасывается до `1`.
 
-Stats apply pending mafia results before rendering the leaderboard.
+## Статистика
 
-Daily stats schedule:
+`/stats` может вызвать только админ или планировщик.
+
+Обычные пользователи не могут вызывать `/stats`, потому что мафиозные атаки и защиты должны оставаться скрытыми до момента статы.
+
+Перед выводом рейтинга стата сначала применяет все накопленные мафиозные атаки и защиты.
+
+Плановая дневная стата:
 
 - `11:00 Asia/Yekaterinburg`
 - `06:00 UTC`
 
-Only users from the `users` table are included in the active leaderboard.
+В активный рейтинг попадают только пользователи из таблицы `users`.

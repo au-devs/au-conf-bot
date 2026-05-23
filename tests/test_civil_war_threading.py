@@ -7,6 +7,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
+import db.database as db
+
 telegram_module = types.ModuleType('telegram')
 telegram_ext_module = types.ModuleType('telegram.ext')
 
@@ -40,6 +42,13 @@ def build_context():
 
 
 class TestCivilWarThreading(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.db_path = 'users_test.sqlite'
+        db.create_database(self.db_path)
+
+    def tearDown(self):
+        db.clear_database(self.db_path)
+
     def test_civil_war_cooldown_uses_env_or_default(self):
         old_value = os.environ.pop('CIVIL_WAR_COOLDOWN_HOURS', None)
         try:
@@ -123,6 +132,29 @@ class TestCivilWarThreading(unittest.IsolatedAsyncioTestCase):
             context.bot.send_photo.await_args.kwargs['caption'],
             '@ramil налудил себе +10 винов',
         )
+
+    async def test_civil_war_uses_global_rare_override(self):
+        db.upsert_civil_war_chance_override(self.db_path, 'global_rare', 0.5)
+        update = build_update()
+        update.effective_message.text = 'гражданская война'
+        context = build_context()
+
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            temp_file.write(b'test')
+            temp_path = Path(temp_file.name)
+
+        try:
+            with patch('handlers.civil_war.os.getenv', side_effect=lambda name, default=None: self.db_path if name == 'DB_PATH' else default), \
+                    patch('handlers.civil_war.get_civil_war_last_used_at', return_value=None), \
+                    patch('handlers.civil_war.upsert_civil_war_last_used_at'), \
+                    patch('handlers.civil_war.random.random', return_value=0.2), \
+                    patch('handlers.civil_war.get_rare_image_path', return_value=temp_path), \
+                    patch('handlers.civil_war.update_civil_war_stats') as update_stats:
+                await civil_war(update, context)
+        finally:
+            os.unlink(temp_path)
+
+        update_stats.assert_called_once_with(self.db_path, 123, 10, '@ramil')
 
     def test_civil_war_dash_command_is_not_trigger(self):
         self.assertFalse(is_civil_war_trigger('/civil-war'))

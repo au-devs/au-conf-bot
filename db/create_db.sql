@@ -42,3 +42,8 @@ CREATE TABLE IF NOT EXISTS command_cooldowns (
     command_name VARCHAR(255) NOT NULL PRIMARY KEY,
     last_used_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS civil_war_chance_overrides (
+    config_key VARCHAR(255) NOT NULL PRIMARY KEY,
+    chance REAL NOT NULL
+);

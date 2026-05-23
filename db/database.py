@@ -56,6 +56,18 @@ def ensure_command_cooldowns_table(conn: sqlite3.Connection) -> None:
     )
 
 
+def ensure_civil_war_chance_overrides_table(conn: sqlite3.Connection) -> None:
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS civil_war_chance_overrides (
+            config_key VARCHAR(255) NOT NULL PRIMARY KEY,
+            chance REAL NOT NULL
+        )
+        """
+    )
+
+
 def get_db_tables(db_path: str) -> list:
     logger.info(f"Fetching tables from database at {db_path}")
     tables = []
@@ -407,6 +419,19 @@ def get_civil_war_stats_without_display_names(db_path: str) -> list[int]:
         return []
 
 
+def get_civil_war_stat_user_ids(db_path: str) -> list[int]:
+    logger.info(f"Fetching civil war stat user ids from database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_stats_table(conn)
+            cursor = conn.cursor()
+            cursor.execute("SELECT user_id FROM civil_war_stats WHERE attempts > 0")
+            return [int(row[0]) for row in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"Error fetching civil war stat user ids from database at {db_path}: {str(e)}")
+        return []
+
+
 def update_civil_war_display_name(db_path: str, user_id: int, display_name: str) -> None:
     logger.info(f"Updating civil war display_name for user_id={user_id} in database at {db_path}")
     try:
@@ -473,6 +498,64 @@ def get_civil_war_stats(db_path: str, user_id: int) -> tuple[int, int]:
     except Exception as e:
         logger.error(f"Error fetching civil war stats for user_id={user_id} from database at {db_path}: {str(e)}")
         return 0, 0
+
+
+def get_civil_war_chance_override(db_path: str, config_key: str) -> float | None:
+    logger.info(f"Fetching civil war chance override {config_key} from database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_chance_overrides_table(conn)
+            cursor = conn.cursor()
+            cursor.execute("SELECT chance FROM civil_war_chance_overrides WHERE config_key = ?", (config_key,))
+            row = cursor.fetchone()
+            return None if row is None else float(row[0])
+    except Exception as e:
+        logger.error(f"Error fetching civil war chance override {config_key} from database at {db_path}: {str(e)}")
+        return None
+
+
+def upsert_civil_war_chance_override(db_path: str, config_key: str, chance: float) -> None:
+    logger.info(f"Updating civil war chance override {config_key} in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_chance_overrides_table(conn)
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO civil_war_chance_overrides (config_key, chance)
+                VALUES (?, ?)
+                ON CONFLICT(config_key) DO UPDATE SET chance = excluded.chance
+                """,
+                (config_key, chance),
+            )
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error updating civil war chance override {config_key} in database at {db_path}: {str(e)}")
+
+
+def delete_civil_war_chance_overrides(db_path: str) -> None:
+    logger.info(f"Deleting all civil war chance overrides from database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_chance_overrides_table(conn)
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM civil_war_chance_overrides")
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error deleting civil war chance overrides from database at {db_path}: {str(e)}")
+
+
+def get_civil_war_chance_overrides(db_path: str) -> dict[str, float]:
+    logger.info(f"Fetching civil war chance overrides from database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_chance_overrides_table(conn)
+            cursor = conn.cursor()
+            cursor.execute("SELECT config_key, chance FROM civil_war_chance_overrides ORDER BY config_key")
+            return {str(row[0]): float(row[1]) for row in cursor.fetchall()}
+    except Exception as e:
+        logger.error(f"Error fetching civil war chance overrides from database at {db_path}: {str(e)}")
+        return {}
 
 
 def get_civil_war_leaderboard(

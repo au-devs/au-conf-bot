@@ -63,6 +63,16 @@ class TestDatabase(unittest.TestCase):
         self.assertEqual(attempts, 3)
         self.assertEqual(successes, 1)
 
+    def test_civil_war_chance_override_persistence(self):
+        db.upsert_civil_war_chance_override(self.db_path, 'global_rare', 0.42)
+
+        self.assertEqual(db.get_civil_war_chance_override(self.db_path, 'global_rare'), 0.42)
+        self.assertEqual(db.get_civil_war_chance_overrides(self.db_path), {'global_rare': 0.42})
+
+        db.delete_civil_war_chance_overrides(self.db_path)
+
+        self.assertIsNone(db.get_civil_war_chance_override(self.db_path, 'global_rare'))
+
     def test_civil_war_leaderboard(self):
         test_user = create_user({'user_id': 1, 'name': 'Test User', 'tg_username': '@test_user', 'birthday': '01.01.2000',
                                  'wishlist_url': 'https://example1.com', 'money_gifts': True, 'funny_gifts': True})

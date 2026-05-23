@@ -10,13 +10,12 @@ from telegram.ext import ContextTypes
 
 from db.database import get_civil_war_last_used_at, upsert_civil_war_last_used_at, update_civil_war_stats, \
     get_civil_war_stats
+from handlers.civil_war_chances import get_global_rare_chance, get_global_success_chance
 
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_COOLDOWN_HOURS = 1
-SUCCESS_CHANCE = 0.0666
-RARE_SUCCESS_CHANCE = 0.00666
 RARE_SUCCESS_POINTS = 10
 DEFAULT_RARE_CAPTION_TEMPLATE = "налудил себе +10 винов"
 COMMAND_TEXT = "гражданская война"
@@ -206,8 +205,10 @@ async def civil_war(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     upsert_civil_war_last_used_at(db_path, user.id, now)
     roll = random.random()
-    is_rare_success = roll < RARE_SUCCESS_CHANCE
-    is_success = is_rare_success or roll < SUCCESS_CHANCE
+    rare_success_chance = get_global_rare_chance(db_path)
+    success_chance = get_global_success_chance(db_path)
+    is_rare_success = roll < rare_success_chance
+    is_success = is_rare_success or roll < success_chance
     successes_delta = RARE_SUCCESS_POINTS if is_rare_success else int(is_success)
     update_civil_war_stats(db_path, user.id, successes_delta, _get_user_display_name(user))
     if is_rare_success:

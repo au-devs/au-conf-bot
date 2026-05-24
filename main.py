@@ -85,7 +85,6 @@ def main() -> None:
     application.add_handler(CommandHandler("test_civil_war_rat_choice", test_civil_war_rat_choice))
     application.add_handler(CommandHandler("test_civil_war_rat", test_civil_war_rat))
     application.add_handler(CommandHandler("help_admin", help_admin))
-    application.add_handler(MessageHandler(filters.Regex(r"^/help-admin(?:@\w+)?(?:\s|$)"), help_admin))
     if application.job_queue is None:
         logger.error("JobQueue is not available. Install python-telegram-bot[job-queue] to enable daily stats.")
     else:

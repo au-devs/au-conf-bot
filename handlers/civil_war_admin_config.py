@@ -5,6 +5,7 @@ from telegram.ext import ContextTypes
 
 from db.database import delete_civil_war_chance_overrides, get_civil_war_chance_overrides, upsert_civil_war_chance_override
 from handlers.admin_checker import is_admin
+from handlers.global_stats import is_bot_admin
 from handlers.civil_war_chances import GLOBAL_MAFIA_EVENT_KEY, GLOBAL_RARE_KEY, GLOBAL_RARE_LOSS_KEY, \
     GLOBAL_RAT_EVENT_KEY, GLOBAL_SUCCESS_KEY, format_chance, get_global_mafia_event_chance, get_global_rare_chance, \
     get_global_rare_loss_chance, get_global_rat_event_chance, get_global_success_chance, parse_chance
@@ -79,9 +80,13 @@ def _format_config_menu(db_path: str) -> str:
 
 
 async def help_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not await _reply_private_admin_only(update):
+    message = update.effective_message
+    if message is None:
         return
-    await update.effective_message.reply_text(HELP_TEXT)
+    if not is_bot_admin(getattr(update.effective_user, "id", None)):
+        await message.reply_text("Команда доступна только админу.")
+        return
+    await message.reply_text(HELP_TEXT)
 
 
 async def civil_war_config(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

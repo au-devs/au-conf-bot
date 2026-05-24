@@ -10,6 +10,8 @@ from handlers.message_handler import message_handler, username_updater
 from handlers.get_users import get_users
 from handlers.add_user import add_user
 from handlers.civil_war_admin_config import civil_war_config, help_admin
+from handlers.civil_war_admin_events import test_civil_war_fail, test_civil_war_mafia, test_civil_war_rare, \
+    test_civil_war_rare_fail, test_civil_war_rat, test_civil_war_rat_choice, test_civil_war_win
 from handlers.civil_war import civil_war, civil_war_stats, get_assets_dir
 from handlers.civil_war_seasons import civil_war_season_stats, civil_war_seasons, save_civil_war_season, \
     start_civil_war_season
@@ -75,6 +77,13 @@ def main() -> None:
     application.add_handler(CommandHandler("start_civil_war_season", start_civil_war_season))
     application.add_handler(CommandHandler("civil_war_seasons", civil_war_seasons))
     application.add_handler(CommandHandler("civil_war_season_stats", civil_war_season_stats))
+    application.add_handler(CommandHandler("test_civil_war_win", test_civil_war_win))
+    application.add_handler(CommandHandler("test_civil_war_fail", test_civil_war_fail))
+    application.add_handler(CommandHandler("test_civil_war_rare", test_civil_war_rare))
+    application.add_handler(CommandHandler("test_civil_war_rare_fail", test_civil_war_rare_fail))
+    application.add_handler(CommandHandler("test_civil_war_mafia", test_civil_war_mafia))
+    application.add_handler(CommandHandler("test_civil_war_rat_choice", test_civil_war_rat_choice))
+    application.add_handler(CommandHandler("test_civil_war_rat", test_civil_war_rat))
     application.add_handler(MessageHandler(filters.Regex(r"^/help-admin(?:\s|$)"), help_admin))
     if application.job_queue is None:
         logger.error("JobQueue is not available. Install python-telegram-bot[job-queue] to enable daily stats.")

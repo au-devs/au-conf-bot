@@ -17,6 +17,13 @@ HELP_TEXT = """Скрытые админские команды гражданк
 /start_civil_war_season <name> - сохранить текущий сезон и начать новый
 /civil_war_seasons - список сезонов
 /civil_war_season_stats <season_id|name> - статистика сезона
+/test_civil_war_win - тест ассета обычной победы
+/test_civil_war_fail - тест ассета обычного поражения
+/test_civil_war_rare - тест ассета редкой победы
+/test_civil_war_rare_fail - тест ассета редкого поражения
+/test_civil_war_mafia - тест ассета мафиозного выбора
+/test_civil_war_rat_choice - тест ассета крысиного выбора
+/test_civil_war_rat - тест ассета крысиного банка
 
 chance можно писать как 0.0666, 6.66 или 6.66%."""
 

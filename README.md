@@ -59,7 +59,7 @@ Available commands:
 /civil_war - civil war roll
 /how_much_civil_war - personal civil war stats
 /stats - global civil war stats, admin only in season 2
-/help-admin - hidden admin help in private chat
+/help_admin - hidden admin help in private chat
 /civil_war_config - hidden admin chance config menu in private chat
 /save_civil_war_season <name> - save current leaderboard as season
 /start_civil_war_season <name> - save current leaderboard and reset active stats

@@ -12,6 +12,7 @@ from handlers.civil_war_chances import GLOBAL_MAFIA_EVENT_KEY, GLOBAL_RARE_KEY, 
 
 ADMIN_CONFIG_STATE = "CIVIL_WAR_ADMIN_CONFIG"
 HELP_TEXT = """Скрытые админские команды гражданки:
+/help_admin - это сообщение
 /civil_war_config - меню настройки шансов гражданки
 /save_civil_war_season <name> - сохранить текущий лидерборд как сезон
 /start_civil_war_season <name> - сохранить текущий сезон и начать новый

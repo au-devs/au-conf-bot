@@ -25,7 +25,7 @@ sys.modules.setdefault('telegram', telegram_module)
 sys.modules.setdefault('telegram.ext', telegram_ext_module)
 
 from handlers.global_stats import can_bypass_stats_cooldown, format_global_stats_message, get_stats_cooldown, stats, \
-    register_stats_chat
+    register_stats_chat, format_mafia_daily_summary
 
 
 class TestGlobalStats(unittest.IsolatedAsyncioTestCase):
@@ -139,6 +139,12 @@ class TestGlobalStats(unittest.IsolatedAsyncioTestCase):
         self.assertIn('рейтинг', message)
         self.assertIn('@test_user2', message)
         self.assertIn('Бро, тебе надо тренироваться', message)
+
+    def test_format_mafia_daily_summary_uses_victim_wording(self):
+        message = format_mafia_daily_summary([('@target', 1, 1, 0)], [])
+
+        self.assertIn('@target нежданули на -1 вин', message)
+        self.assertNotIn('нежданул на', message)
 
     def test_format_global_stats_message_includes_low_sample_users(self):
         test_user = create_user({'user_id': 1, 'name': 'Test User', 'tg_username': '@test_user', 'birthday': '01.01.2000',

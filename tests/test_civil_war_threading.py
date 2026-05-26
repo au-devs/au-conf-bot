@@ -3,6 +3,7 @@ import sys
 import tempfile
 import types
 import unittest
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -26,8 +27,9 @@ telegram_ext_module.ContextTypes = DummyContextTypes
 sys.modules.setdefault('telegram', telegram_module)
 sys.modules.setdefault('telegram.ext', telegram_ext_module)
 
-from handlers.civil_war import _get_rare_fail_caption, _get_rare_success_caption, _get_success_caption, \
-    _get_user_display_name, _send_image, _send_text, civil_war, get_cooldown, is_civil_war_trigger
+from handlers.civil_war import _get_rare_fail_caption, _get_remaining_cooldown_message, _get_rare_success_caption, \
+    _get_success_caption, _get_user_display_name, _send_image, _send_text, civil_war, get_cooldown, \
+    is_civil_war_trigger
 
 
 def build_update(thread_id: int = 42):
@@ -60,6 +62,15 @@ class TestCivilWarThreading(unittest.IsolatedAsyncioTestCase):
                 os.environ.pop('CIVIL_WAR_COOLDOWN_HOURS', None)
             else:
                 os.environ['CIVIL_WAR_COOLDOWN_HOURS'] = old_value
+
+    def test_civil_war_cooldown_message_uses_one_hour_text(self):
+        message = _get_remaining_cooldown_message(
+            datetime(2026, 5, 26, 12, 0, 0),
+            datetime(2026, 5, 26, 12, 59, 44),
+        )
+
+        self.assertIn('раза в один час', message)
+        self.assertNotIn('1 часов', message)
 
     def test_success_caption_uses_username_when_available(self):
         update = build_update()

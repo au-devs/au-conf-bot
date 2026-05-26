@@ -109,8 +109,9 @@ def _get_remaining_cooldown_message(last_used_at: datetime.datetime, now: dateti
     minutes, seconds = divmod(remaining_seconds, 60)
     hours, minutes = divmod(minutes, 60)
     cooldown_hours = get_env_float("CIVIL_WAR_COOLDOWN_HOURS", DEFAULT_COOLDOWN_HOURS)
+    cooldown_label = "один час" if cooldown_hours == 1 else f"{cooldown_hours:g} часов"
     return (
-        f"Гражданскую войну можно запускать не чаще раза в {cooldown_hours:g} часов. "
+        f"Гражданскую войну можно запускать не чаще раза в {cooldown_label}. "
         f"Осталось: {hours:02d}:{minutes:02d}:{seconds:02d}"
     )
 

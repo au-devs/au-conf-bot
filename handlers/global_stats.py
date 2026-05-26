@@ -60,9 +60,9 @@ def format_mafia_daily_summary(damaged: list[tuple[str, int, int, int]], defende
     victims = []
     for display_name, damage, attacks, protections in damaged:
         if protections > 0:
-            victims.append(f"{display_name} нежданул на -{damage} вин, защита срезала {protections} урона")
+            victims.append(f"{display_name} нежданули на -{damage} вин, защита срезала {protections} урона")
         else:
-            victims.append(f"{display_name} нежданул на -{damage} вин")
+            victims.append(f"{display_name} нежданули на -{damage} вин")
     text = f"Город просыпается, но {', '.join(victims)}"
     if defended:
         defended_text = ", ".join(

@@ -152,6 +152,7 @@ class TestCivilWarThreading(unittest.IsolatedAsyncioTestCase):
             context.bot.send_photo.await_args.kwargs['caption'],
             '@ramil налудил себе +10 винов',
         )
+        self.assertNotIn('message_thread_id', context.bot.send_photo.await_args.kwargs)
 
     async def test_civil_war_uses_global_rare_override(self):
         db.upsert_civil_war_chance_override(self.db_path, 'global_rare', 0.5)
@@ -201,6 +202,7 @@ class TestCivilWarThreading(unittest.IsolatedAsyncioTestCase):
             context.bot.send_photo.await_args.kwargs['caption'],
             '@ramil словил редкое поражение: -1 вин',
         )
+        self.assertNotIn('message_thread_id', context.bot.send_photo.await_args.kwargs)
 
     async def test_civil_war_normal_success_collects_rat_bank(self):
         db.set_rat_points(self.db_path, 3)

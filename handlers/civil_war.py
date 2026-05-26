@@ -288,7 +288,7 @@ async def civil_war(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         context.bot,
         update,
         selected_image,
-        send_to_general=is_success,
+        send_to_general=is_success or is_rare_success or is_rare_loss,
         caption=caption,
         parse_mode=parse_mode,
     )

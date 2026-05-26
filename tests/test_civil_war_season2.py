@@ -59,7 +59,7 @@ class TestCivilWarSeason2(unittest.IsolatedAsyncioTestCase):
         message = SimpleNamespace(text=text, reply_text=AsyncMock())
         return SimpleNamespace(
             effective_chat=SimpleNamespace(id=456, type='private'),
-            effective_user=SimpleNamespace(id=1),
+            effective_user=SimpleNamespace(id=1, username='actor', full_name='Actor'),
             effective_message=message,
         )
 
@@ -162,7 +162,8 @@ class TestCivilWarSeason2(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(handled)
         context.bot.send_photo.assert_awaited_once()
         self.assertEqual(context.bot.send_photo.await_args.kwargs['chat_id'], -100)
-        self.assertEqual(context.bot.send_photo.await_args.kwargs['message_thread_id'], 77)
+        self.assertNotIn('message_thread_id', context.bot.send_photo.await_args.kwargs)
+        self.assertIn('@actor', context.bot.send_photo.await_args.kwargs['caption'])
         self.assertIn('+4', context.bot.send_photo.await_args.kwargs['caption'])
 
 

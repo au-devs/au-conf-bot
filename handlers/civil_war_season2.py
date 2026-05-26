@@ -18,6 +18,13 @@ def get_rat_caption_template() -> str:
     return os.getenv("RAT_CIVIL_WAR_CAPTION_TEMPLATE", DEFAULT_RAT_CAPTION_TEMPLATE)
 
 
+def get_user_display_name(user) -> str:
+    username = getattr(user, "username", None)
+    if username:
+        return f"@{username}"
+    return getattr(user, "full_name", None) or getattr(user, "name", None) or "пользователь"
+
+
 def get_rat_image_path() -> Path:
     return resolve_asset_path(Path(os.getenv("ASSETS_DIR", str(DEFAULT_ASSETS_DIR))), "rat")
 
@@ -133,13 +140,11 @@ async def process_season2_private_response(update: Update, context: ContextTypes
             set_rat_points(db_path, 1)
             delete_rat_pending(db_path, user.id)
             image_path = get_rat_image_path()
-            caption = get_rat_caption_template().format(points=rat_points)
+            caption = f"{get_user_display_name(user)} {get_rat_caption_template().format(points=rat_points)}"
             if source_chat_id is None:
                 await send_asset(context.bot, image_path, fallback_name=image_path.name, chat_id=user.id, caption=caption)
             else:
                 chat_kwargs = {"chat_id": source_chat_id}
-                if source_message_thread_id is not None:
-                    chat_kwargs["message_thread_id"] = source_message_thread_id
                 await send_asset(context.bot, image_path, fallback_name=image_path.name, caption=caption, **chat_kwargs)
             return True
         if text == "2":

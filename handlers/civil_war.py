@@ -9,11 +9,11 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from db.database import get_civil_war_last_used_at, upsert_civil_war_last_used_at, update_civil_war_stats, \
-    get_civil_war_stats, get_rat_points, has_verified_private_chat, set_rat_points
+    get_civil_war_stats, has_verified_private_chat
 from handlers.assets import resolve_asset_path, send_asset
 from handlers.civil_war_chances import get_global_mafia_event_chance, get_global_rare_chance, \
     get_global_rare_loss_chance, get_global_rat_event_chance, get_global_success_chance
-from handlers.civil_war_season2 import get_rat_image_path, start_mafia_event, start_rat_event
+from handlers.civil_war_season2 import start_mafia_event, start_rat_event
 
 
 logger = logging.getLogger(__name__)
@@ -138,13 +138,6 @@ def _get_success_caption(user) -> tuple[str, str | None]:
     return f'<a href="tg://user?id={user_id}">@{escaped_name}</a> устроил гражданскую войну', "HTML"
 
 
-def _append_rat_bonus_caption(caption: str, parse_mode: str | None, rat_bonus: int) -> tuple[str, str | None]:
-    bonus_text = f" и забрал крысиный банк +{rat_bonus} винов"
-    if parse_mode == "HTML":
-        bonus_text = html.escape(bonus_text)
-    return f"{caption}{bonus_text}", parse_mode
-
-
 def _get_user_caption_mention(user) -> tuple[str, str | None]:
     username = getattr(user, "username", None)
     if username:
@@ -246,19 +239,12 @@ async def civil_war(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     threshold += success_chance
     is_success = not any([is_rare_success, is_rare_loss, is_mafia_event, is_rat_event]) and roll < threshold
 
-    rat_bonus = 0
-    if is_success:
-        rat_points = get_rat_points(db_path)
-        if rat_points > 1:
-            rat_bonus = rat_points
-            set_rat_points(db_path, 1)
-
     if is_rare_success:
         successes_delta = RARE_SUCCESS_POINTS
     elif is_rare_loss:
         successes_delta = RARE_LOSS_POINTS
     else:
-        successes_delta = int(is_success) + rat_bonus
+        successes_delta = int(is_success)
     update_civil_war_stats(db_path, user.id, successes_delta, _get_user_display_name(user))
 
     if is_mafia_event or is_rat_event:
@@ -280,10 +266,8 @@ async def civil_war(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         selected_image = get_rare_fail_image_path()
         caption, parse_mode = _get_rare_fail_caption(user)
     else:
-        selected_image = get_rat_image_path() if rat_bonus > 0 else get_success_image_path() if is_success else get_fail_image_path()
+        selected_image = get_success_image_path() if is_success else get_fail_image_path()
         caption, parse_mode = _get_success_caption(user) if is_success else (None, None)
-        if is_success and rat_bonus > 0 and caption is not None:
-            caption, parse_mode = _append_rat_bonus_caption(caption, parse_mode, rat_bonus)
     await _send_image(
         context.bot,
         update,

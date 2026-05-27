@@ -1019,24 +1019,37 @@ def process_mafia_daily_actions(db_path: str, processed_at: datetime | None = No
             ensure_civil_war_season2_tables(conn)
             ensure_civil_war_stats_table(conn)
             cursor = conn.cursor()
+            cursor.execute("BEGIN IMMEDIATE")
             cursor.execute(
                 """
-                SELECT target_user_id, COUNT(*)
+                SELECT event_id, actor_user_id, target_user_id, action
                 FROM civil_war_mafia_daily
-                WHERE processed_at IS NULL AND action = 'attack' AND target_user_id IS NOT NULL
-                GROUP BY target_user_id
+                WHERE processed_at IS NULL
+                ORDER BY event_id
                 """
             )
-            attacks = {int(row[0]): int(row[1]) for row in cursor.fetchall()}
+            events = cursor.fetchall()
+            if not events:
+                conn.commit()
+                return damaged, defended
+
+            event_ids = [int(row[0]) for row in events]
+            placeholders = ", ".join("?" for _ in event_ids)
             cursor.execute(
-                """
-                SELECT actor_user_id, COUNT(*)
-                FROM civil_war_mafia_daily
-                WHERE processed_at IS NULL AND action = 'protect'
-                GROUP BY actor_user_id
-                """
+                f"UPDATE civil_war_mafia_daily SET processed_at = ? WHERE event_id IN ({placeholders})",
+                (processed_time.isoformat(), *event_ids),
             )
-            protections = {int(row[0]): int(row[1]) for row in cursor.fetchall()}
+
+            attacks: dict[int, int] = {}
+            protections: dict[int, int] = {}
+            for _, actor_user_id, target_user_id, action in events:
+                if action == 'attack' and target_user_id is not None:
+                    target_id = int(target_user_id)
+                    attacks[target_id] = attacks.get(target_id, 0) + 1
+                elif action == 'protect':
+                    actor_id = int(actor_user_id)
+                    protections[actor_id] = protections.get(actor_id, 0) + 1
+
             for target_user_id, attack_count in attacks.items():
                 protection_count = protections.get(target_user_id, 0)
                 damage = max(attack_count - protection_count, 0)
@@ -1062,10 +1075,6 @@ def process_mafia_daily_actions(db_path: str, processed_at: datetime | None = No
                     damaged.append((display_name, damage, attack_count, protection_count))
                 elif protection_count > 0:
                     defended.append((display_name, attack_count, protection_count))
-            cursor.execute(
-                "UPDATE civil_war_mafia_daily SET processed_at = ? WHERE processed_at IS NULL",
-                (processed_time.isoformat(),),
-            )
             conn.commit()
     except Exception as e:
         logger.error(f"Error processing mafia daily actions in database at {db_path}: {str(e)}")

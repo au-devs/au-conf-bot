@@ -258,6 +258,26 @@ class TestDatabase(unittest.TestCase):
         self.assertEqual(defended, [])
         self.assertEqual(db.get_civil_war_stats(self.db_path, 2), (5, 4))
 
+    def test_process_mafia_daily_actions_does_not_repeat_processed_damage(self):
+        attacker = create_user({'user_id': 1, 'name': 'Attacker', 'tg_username': '@attacker', 'birthday': '01.01.2000',
+                                'wishlist_url': 'https://example1.com', 'money_gifts': True, 'funny_gifts': True})
+        target = create_user({'user_id': 2, 'name': 'Target', 'tg_username': '@target', 'birthday': '01.01.2000',
+                              'wishlist_url': 'https://example2.com', 'money_gifts': True, 'funny_gifts': True})
+        db.add_user(self.db_path, attacker)
+        db.add_user(self.db_path, target)
+        for _ in range(3):
+            db.update_civil_war_stats(self.db_path, 2, True)
+        db.add_mafia_daily_action(self.db_path, 1, 'attack', 2)
+
+        first_damaged, first_defended = db.process_mafia_daily_actions(self.db_path)
+        second_damaged, second_defended = db.process_mafia_daily_actions(self.db_path)
+
+        self.assertEqual(first_damaged, [('@target', 1, 1, 0)])
+        self.assertEqual(first_defended, [])
+        self.assertEqual(second_damaged, [])
+        self.assertEqual(second_defended, [])
+        self.assertEqual(db.get_civil_war_stats(self.db_path, 2), (3, 2))
+
     def test_rat_points_persistence(self):
         self.assertEqual(db.get_rat_points(self.db_path), 1)
         db.set_rat_points(self.db_path, 3)

@@ -16,6 +16,13 @@ CIVIL_WAR_RAT_EVENT_CHANCE=0.015
 RARE_CIVIL_WAR_CAPTION_TEMPLATE=съел сладкий пирог, +10 винов
 RARE_FAIL_CIVIL_WAR_CAPTION_TEMPLATE=словил редкое поражение: -1 вин
 RAT_CIVIL_WAR_CAPTION_TEMPLATE=забрал крысиный банк: +{points} винов
+RAT_BANK_PASS_INCREMENT=2
+RAT_INVESTOR_DIVIDEND_RATE=0.25
+RAT_INVESTOR_DIVIDEND_MIN=1
+RAT_INVESTOR_DIVIDEND_MAX=3
+RAT_INVESTOR_CAPTION_TEMPLATE={username} инвестировал в крысиный банк. Деньги должны работать, аутяги должны инвестировать. Банк: +{points} винов
+RAT_DIVIDEND_CAPTION_TEMPLATE=Деньги должны работать, аутяги должны получать дивиденды: {investors} получили по +{dividend} винов
+RAT_STEAL_STATS_CAPTION_TEMPLATE={taker} скрысил банк на +{points} винов. Аутяги нахастлили {hustled}, но крыса все испортила
 ```
 
 Assets in ASSETS_DIR:
@@ -25,6 +32,7 @@ fail.jpg
 rare.jpg
 rare_fail.jpg
 rat.jpg
+rat_investor.jpg
 mafia.jpg
 rat_choice.jpg
 ```

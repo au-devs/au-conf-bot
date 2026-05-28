@@ -1,21 +1,79 @@
+import math
 import os
 from pathlib import Path
 
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from db.database import add_mafia_daily_action, adjust_civil_war_successes, create_mafia_pending, create_rat_pending, \
-    delete_mafia_pending, delete_rat_pending, find_verified_civil_war_user, get_civil_war_leaderboard, \
-    get_mafia_pending_state, get_rat_pending, get_rat_points, set_mafia_pending_state, set_rat_points
+from db.database import add_mafia_daily_action, add_rat_investor, adjust_civil_war_successes, clear_rat_investors, \
+    create_mafia_pending, create_rat_pending, create_rat_steal_report, delete_mafia_pending, delete_rat_pending, \
+    find_verified_civil_war_user, get_civil_war_leaderboard, get_mafia_pending_state, get_rat_hustled_points, \
+    get_rat_pending, get_rat_points, reset_rat_hustled_points, set_mafia_pending_state, set_rat_points
 from handlers.assets import resolve_asset_path, send_asset
 
 
 DEFAULT_RAT_CAPTION_TEMPLATE = "забрал крысиный банк: +{points} винов"
+DEFAULT_RAT_INVESTOR_CAPTION_TEMPLATE = "{username} инвестировал в крысиный банк. Деньги должны работать, аутяги должны инвестировать. Банк: +{points} винов"
+DEFAULT_RAT_DIVIDEND_CAPTION_TEMPLATE = "Деньги должны работать, аутяги должны получать дивиденды: {investors} получили по +{dividend} винов"
+DEFAULT_RAT_STEAL_STATS_CAPTION_TEMPLATE = "{taker} скрысил банк на +{points} винов. Аутяги нахастлили {hustled}, но крыса все испортила"
+DEFAULT_RAT_BANK_PASS_INCREMENT = 2
+DEFAULT_RAT_INVESTOR_DIVIDEND_RATE = 0.25
+DEFAULT_RAT_INVESTOR_DIVIDEND_MIN = 1
+DEFAULT_RAT_INVESTOR_DIVIDEND_MAX = 3
 DEFAULT_ASSETS_DIR = Path("/data/assets")
 
 
 def get_rat_caption_template() -> str:
     return os.getenv("RAT_CIVIL_WAR_CAPTION_TEMPLATE", DEFAULT_RAT_CAPTION_TEMPLATE)
+
+
+def get_rat_investor_caption_template() -> str:
+    return os.getenv("RAT_INVESTOR_CAPTION_TEMPLATE", DEFAULT_RAT_INVESTOR_CAPTION_TEMPLATE)
+
+
+def get_rat_dividend_caption_template() -> str:
+    return os.getenv("RAT_DIVIDEND_CAPTION_TEMPLATE", DEFAULT_RAT_DIVIDEND_CAPTION_TEMPLATE)
+
+
+def get_rat_steal_stats_caption_template() -> str:
+    return os.getenv("RAT_STEAL_STATS_CAPTION_TEMPLATE", DEFAULT_RAT_STEAL_STATS_CAPTION_TEMPLATE)
+
+
+def get_env_float(name: str, default: float) -> float:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except ValueError:
+        return default
+
+
+def get_env_int(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        return default
+
+
+def get_rat_bank_pass_increment() -> int:
+    return max(get_env_int("RAT_BANK_PASS_INCREMENT", DEFAULT_RAT_BANK_PASS_INCREMENT), 1)
+
+
+def calculate_rat_dividend(points: int) -> int:
+    rate = max(get_env_float("RAT_INVESTOR_DIVIDEND_RATE", DEFAULT_RAT_INVESTOR_DIVIDEND_RATE), 0)
+    min_dividend = max(get_env_int("RAT_INVESTOR_DIVIDEND_MIN", DEFAULT_RAT_INVESTOR_DIVIDEND_MIN), 0)
+    max_dividend = max(get_env_int("RAT_INVESTOR_DIVIDEND_MAX", DEFAULT_RAT_INVESTOR_DIVIDEND_MAX), min_dividend)
+    return min(max(math.ceil(points * rate), min_dividend), max_dividend)
+
+
+def format_rat_invest_reward_text(points: int) -> str:
+    future_points = points + get_rat_bank_pass_increment()
+    dividend = calculate_rat_dividend(future_points)
+    return f"инвесторы будут получать по +{dividend} винов на каждой стате, пока банк работает"
 
 
 def get_user_display_name(user) -> str:
@@ -37,8 +95,19 @@ def get_rat_choice_image_path() -> Path:
     return resolve_asset_path(Path(os.getenv("ASSETS_DIR", str(DEFAULT_ASSETS_DIR))), "rat_choice")
 
 
+def get_rat_investor_image_path() -> Path:
+    return resolve_asset_path(Path(os.getenv("ASSETS_DIR", str(DEFAULT_ASSETS_DIR))), "rat_investor")
+
+
 async def send_private_choice(bot, user_id: int, image_path: Path, text: str) -> None:
     await send_asset(bot, image_path, fallback_name=image_path.name, chat_id=user_id, caption=text)
+
+
+async def send_to_source_chat(bot, image_path: Path, source_chat_id: int | None, caption: str, fallback_user_id: int) -> None:
+    if source_chat_id is None:
+        await send_asset(bot, image_path, fallback_name=image_path.name, chat_id=fallback_user_id, caption=caption)
+        return
+    await send_asset(bot, image_path, fallback_name=image_path.name, chat_id=source_chat_id, caption=caption)
 
 
 def get_source_chat_kwargs(update: Update) -> tuple[int | None, int | None]:
@@ -106,6 +175,7 @@ async def start_rat_event(update: Update, context: ContextTypes.DEFAULT_TYPE, db
         source_message_thread_id=source_message_thread_id,
     )
     try:
+        next_points = points + get_rat_bank_pass_increment()
         await send_private_choice(
             context.bot,
             user.id,
@@ -113,7 +183,7 @@ async def start_rat_event(update: Update, context: ContextTypes.DEFAULT_TYPE, db
             (
                 f"Тебе выпала крыса. В банке {points} винов. Ответь цифрой:\n"
                 f"1. Забрать +{points} сейчас\n"
-                f"2. Передать дальше, банк станет {points + 2}"
+                f"2. Инвестировать, банк станет {next_points}; {format_rat_invest_reward_text(points)}"
             ),
         )
         return True
@@ -136,21 +206,25 @@ async def process_season2_private_response(update: Update, context: ContextTypes
     if rat_pending is not None:
         rat_points, source_chat_id, source_message_thread_id = rat_pending
         if text == "1":
+            display_name = get_user_display_name(user)
             adjust_civil_war_successes(db_path, user.id, rat_points)
+            create_rat_steal_report(db_path, user.id, display_name, rat_points, get_rat_hustled_points(db_path))
             set_rat_points(db_path, 1)
+            reset_rat_hustled_points(db_path)
+            clear_rat_investors(db_path)
             delete_rat_pending(db_path, user.id)
             image_path = get_rat_image_path()
-            caption = f"{get_user_display_name(user)} {get_rat_caption_template().format(points=rat_points)}"
-            if source_chat_id is None:
-                await send_asset(context.bot, image_path, fallback_name=image_path.name, chat_id=user.id, caption=caption)
-            else:
-                chat_kwargs = {"chat_id": source_chat_id}
-                await send_asset(context.bot, image_path, fallback_name=image_path.name, caption=caption, **chat_kwargs)
+            caption = f"{display_name} {get_rat_caption_template().format(points=rat_points)}"
+            await send_to_source_chat(context.bot, image_path, source_chat_id, caption, user.id)
             return True
         if text == "2":
-            set_rat_points(db_path, rat_points + 2)
+            new_points = rat_points + get_rat_bank_pass_increment()
+            set_rat_points(db_path, new_points)
+            display_name = get_user_display_name(user)
+            add_rat_investor(db_path, user.id, display_name)
             delete_rat_pending(db_path, user.id)
-            await message.reply_text(f"Передал дальше. Новый крысиный банк: {rat_points + 2}")
+            caption = get_rat_investor_caption_template().format(username=display_name, points=new_points)
+            await send_to_source_chat(context.bot, get_rat_investor_image_path(), source_chat_id, caption, user.id)
             return True
         await message.reply_text("Ответь 1 или 2.")
         return True

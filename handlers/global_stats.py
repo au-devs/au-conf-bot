@@ -6,9 +6,12 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from db.database import get_civil_war_leaderboard, get_civil_war_lowest_winrate, \
-    get_civil_war_stats_without_display_names, get_command_last_used_at, process_mafia_daily_actions, \
-    update_civil_war_display_name, upsert_command_last_used_at
+    get_civil_war_stats_without_display_names, get_command_last_used_at, add_rat_hustled_points, \
+    adjust_civil_war_successes, get_rat_investors, get_rat_points, process_mafia_daily_actions, \
+    process_rat_steal_reports, update_civil_war_display_name, upsert_command_last_used_at
 from handlers.admin_checker import is_admin
+from handlers.civil_war_season2 import calculate_rat_dividend, get_rat_dividend_caption_template, \
+    get_rat_steal_stats_caption_template
 
 
 logger = logging.getLogger(__name__)
@@ -73,7 +76,43 @@ def format_mafia_daily_summary(damaged: list[tuple[str, int, int, int]], defende
     return text
 
 
-def format_global_stats_message(db_path: str, mafia_summary: str | None = None) -> str:
+def process_rat_daily_dividends(db_path: str) -> str | None:
+    investors = get_rat_investors(db_path)
+    if not investors:
+        return None
+
+    points = get_rat_points(db_path)
+    dividend = calculate_rat_dividend(points)
+    if dividend <= 0:
+        return None
+
+    for user_id, _ in investors:
+        adjust_civil_war_successes(db_path, user_id, dividend)
+    add_rat_hustled_points(db_path, dividend * len(investors))
+
+    investors_text = ", ".join(display_name for _, display_name in investors)
+    return get_rat_dividend_caption_template().format(
+        investors=investors_text,
+        dividend=dividend,
+        points=points,
+    )
+
+
+def format_rat_steal_stats_summary(reports: list[tuple[str, int, int]]) -> str | None:
+    if not reports:
+        return None
+    lines = [
+        get_rat_steal_stats_caption_template().format(
+            taker=taker,
+            points=points,
+            hustled=hustled,
+        )
+        for taker, points, hustled in reports
+    ]
+    return "\n".join(lines)
+
+
+def format_global_stats_message(db_path: str, extra_summary: str | None = None) -> str:
     leaderboard = get_civil_war_leaderboard(
         db_path,
         prior_attempts=BAYES_PRIOR_ATTEMPTS,
@@ -111,8 +150,8 @@ def format_global_stats_message(db_path: str, mafia_summary: str | None = None) 
             f"при винрейте {winrate * 100:.2f}% ({successes}/{attempts}). "
             "Бро, тебе надо тренироваться",
         ])
-    if mafia_summary:
-        lines.extend(["", mafia_summary])
+    if extra_summary:
+        lines.extend(["", extra_summary])
     return "\n".join(lines)
 
 
@@ -146,6 +185,19 @@ async def refresh_missing_civil_war_display_names(update: Update, context: Conte
 
 async def sync_civil_war_users(update: Update, context: ContextTypes.DEFAULT_TYPE, db_path: str) -> None:
     await refresh_missing_civil_war_display_names(update, context, db_path)
+
+
+def build_daily_stats_summary(
+        db_path: str,
+        damaged: list[tuple[str, int, int, int]],
+        defended: list[tuple[str, int, int]],
+) -> str:
+    summaries = [
+        format_mafia_daily_summary(damaged, defended),
+        process_rat_daily_dividends(db_path),
+        format_rat_steal_stats_summary(process_rat_steal_reports(db_path)),
+    ]
+    return "\n".join(summary for summary in summaries if summary)
 
 
 def get_remaining_cooldown_message(last_used_at: datetime.datetime, now: datetime.datetime) -> str:
@@ -197,13 +249,15 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         upsert_command_last_used_at(db_path, STATS_COMMAND, now)
     await sync_civil_war_users(update, context, db_path)
     damaged, defended = process_mafia_daily_actions(db_path)
-    await message.reply_text(format_global_stats_message(db_path, format_mafia_daily_summary(damaged, defended)))
+    extra_summary = build_daily_stats_summary(db_path, damaged, defended)
+    await message.reply_text(format_global_stats_message(db_path, extra_summary))
 
 
 async def send_daily_stats(context: ContextTypes.DEFAULT_TYPE) -> None:
     db_path = os.getenv("DB_PATH")
     damaged, defended = process_mafia_daily_actions(db_path)
-    message = format_global_stats_message(db_path, format_mafia_daily_summary(damaged, defended))
+    extra_summary = build_daily_stats_summary(db_path, damaged, defended)
+    message = format_global_stats_message(db_path, extra_summary)
     chat_ids = sorted(context.bot_data.get(STATS_CHAT_IDS_KEY, set()))
     if not chat_ids:
         logger.info("No chats registered for daily stats")

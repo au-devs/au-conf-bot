@@ -287,6 +287,10 @@ class TestDatabase(unittest.TestCase):
         self.assertEqual(db.get_rat_pending_points(self.db_path, 1), 3)
         db.delete_rat_pending(self.db_path, 1)
         self.assertIsNone(db.get_rat_pending_points(self.db_path, 1))
+        db.add_rat_investor(self.db_path, 1, '@investor')
+        self.assertEqual(db.get_rat_investors(self.db_path), [(1, '@investor')])
+        db.clear_rat_investors(self.db_path)
+        self.assertEqual(db.get_rat_investors(self.db_path), [])
 
     def test_reset_user_reminders(self):
         test_user = create_user({'user_id': 1, 'name': 'Test User', 'tg_username': '@test_user', 'birthday': '01.01.2000',

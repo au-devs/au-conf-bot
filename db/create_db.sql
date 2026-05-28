@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS civil_war_mafia_daily (
 CREATE TABLE IF NOT EXISTS civil_war_rat_state (
     id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
     points INTEGER NOT NULL DEFAULT 1,
+    hustled_points INTEGER NOT NULL DEFAULT 0,
     updated_at TEXT NOT NULL
 );
 
@@ -85,6 +86,24 @@ CREATE TABLE IF NOT EXISTS civil_war_rat_pending (
     source_chat_id INTEGER NULL,
     source_message_thread_id INTEGER NULL,
     FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS civil_war_rat_investors (
+    user_id INTEGER NOT NULL PRIMARY KEY,
+    display_name VARCHAR(255) NOT NULL,
+    invested_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS civil_war_rat_steal_reports (
+    event_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    taker_user_id INTEGER NOT NULL,
+    taker_display_name VARCHAR(255) NOT NULL,
+    bank_points INTEGER NOT NULL,
+    hustled_points INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    reported_at TEXT NULL,
+    FOREIGN KEY (taker_user_id) REFERENCES users (user_id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS civil_war_seasons (

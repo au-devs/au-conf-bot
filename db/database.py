@@ -142,10 +142,15 @@ def ensure_civil_war_season2_tables(conn: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS civil_war_rat_state (
             id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
             points INTEGER NOT NULL DEFAULT 1,
+            hustled_points INTEGER NOT NULL DEFAULT 0,
             updated_at TEXT NOT NULL
         )
         """
     )
+    cursor.execute("PRAGMA table_info(civil_war_rat_state)")
+    rat_state_columns = {row[1] for row in cursor.fetchall()}
+    if 'hustled_points' not in rat_state_columns:
+        cursor.execute("ALTER TABLE civil_war_rat_state ADD COLUMN hustled_points INTEGER NOT NULL DEFAULT 0")
     cursor.execute(
         """
         CREATE TABLE IF NOT EXISTS civil_war_rat_pending (
@@ -158,12 +163,36 @@ def ensure_civil_war_season2_tables(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS civil_war_rat_steal_reports (
+            event_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+            taker_user_id INTEGER NOT NULL,
+            taker_display_name VARCHAR(255) NOT NULL,
+            bank_points INTEGER NOT NULL,
+            hustled_points INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            reported_at TEXT NULL,
+            FOREIGN KEY (taker_user_id) REFERENCES users (user_id) ON DELETE CASCADE
+        )
+        """
+    )
     cursor.execute("PRAGMA table_info(civil_war_rat_pending)")
     columns = {row[1] for row in cursor.fetchall()}
     if 'source_chat_id' not in columns:
         cursor.execute("ALTER TABLE civil_war_rat_pending ADD COLUMN source_chat_id INTEGER NULL")
     if 'source_message_thread_id' not in columns:
         cursor.execute("ALTER TABLE civil_war_rat_pending ADD COLUMN source_message_thread_id INTEGER NULL")
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS civil_war_rat_investors (
+            user_id INTEGER NOT NULL PRIMARY KEY,
+            display_name VARCHAR(255) NOT NULL,
+            invested_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
+        )
+        """
+    )
 
 
 def get_db_tables(db_path: str) -> list:
@@ -1095,6 +1124,20 @@ def get_rat_points(db_path: str) -> int:
         return 1
 
 
+def get_rat_hustled_points(db_path: str) -> int:
+    logger.info(f"Fetching rat hustled points from database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_season2_tables(conn)
+            cursor = conn.cursor()
+            cursor.execute("SELECT hustled_points FROM civil_war_rat_state WHERE id = 1")
+            row = cursor.fetchone()
+            return 0 if row is None else max(int(row[0]), 0)
+    except Exception as e:
+        logger.error(f"Error fetching rat hustled points from database at {db_path}: {str(e)}")
+        return 0
+
+
 def set_rat_points(db_path: str, points: int, updated_at: datetime | None = None) -> None:
     logger.info(f"Setting rat points={points} in database at {db_path}")
     try:
@@ -1112,6 +1155,121 @@ def set_rat_points(db_path: str, points: int, updated_at: datetime | None = None
             conn.commit()
     except Exception as e:
         logger.error(f"Error setting rat points in database at {db_path}: {str(e)}")
+
+
+def add_rat_hustled_points(db_path: str, points_delta: int, updated_at: datetime | None = None) -> None:
+    logger.info(f"Adding rat hustled points_delta={points_delta} in database at {db_path}")
+    if points_delta <= 0:
+        return
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_season2_tables(conn)
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO civil_war_rat_state (id, points, hustled_points, updated_at)
+                VALUES (1, 1, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    hustled_points = hustled_points + excluded.hustled_points,
+                    updated_at = excluded.updated_at
+                """,
+                (int(points_delta), (updated_at or datetime.now()).isoformat()),
+            )
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error adding rat hustled points in database at {db_path}: {str(e)}")
+
+
+def reset_rat_hustled_points(db_path: str, updated_at: datetime | None = None) -> None:
+    logger.info(f"Resetting rat hustled points in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_season2_tables(conn)
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO civil_war_rat_state (id, points, hustled_points, updated_at)
+                VALUES (1, 1, 0, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    hustled_points = 0,
+                    updated_at = excluded.updated_at
+                """,
+                ((updated_at or datetime.now()).isoformat(),),
+            )
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error resetting rat hustled points in database at {db_path}: {str(e)}")
+
+
+def create_rat_steal_report(
+        db_path: str,
+        taker_user_id: int,
+        taker_display_name: str,
+        bank_points: int,
+        hustled_points: int,
+        created_at: datetime | None = None,
+) -> None:
+    logger.info(f"Creating rat steal report for taker_user_id={taker_user_id} in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_season2_tables(conn)
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO civil_war_rat_steal_reports (
+                    taker_user_id, taker_display_name, bank_points, hustled_points, created_at
+                )
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    taker_user_id,
+                    taker_display_name,
+                    max(int(bank_points), 1),
+                    max(int(hustled_points), 0),
+                    (created_at or datetime.now()).isoformat(),
+                ),
+            )
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error creating rat steal report for taker_user_id={taker_user_id} in database at {db_path}: {str(e)}")
+
+
+def process_rat_steal_reports(
+        db_path: str,
+        reported_at: datetime | None = None,
+) -> list[tuple[str, int, int]]:
+    logger.info(f"Processing rat steal reports in database at {db_path}")
+    report_time = reported_at or datetime.now()
+    reports: list[tuple[str, int, int]] = []
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_season2_tables(conn)
+            cursor = conn.cursor()
+            cursor.execute("BEGIN IMMEDIATE")
+            cursor.execute(
+                """
+                SELECT event_id, taker_display_name, bank_points, hustled_points
+                FROM civil_war_rat_steal_reports
+                WHERE reported_at IS NULL
+                ORDER BY event_id
+                """
+            )
+            rows = cursor.fetchall()
+            if not rows:
+                conn.commit()
+                return reports
+
+            event_ids = [int(row[0]) for row in rows]
+            placeholders = ", ".join("?" for _ in event_ids)
+            cursor.execute(
+                f"UPDATE civil_war_rat_steal_reports SET reported_at = ? WHERE event_id IN ({placeholders})",
+                (report_time.isoformat(), *event_ids),
+            )
+            reports = [(str(row[1]), max(int(row[2]), 1), max(int(row[3]), 0)) for row in rows]
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error processing rat steal reports in database at {db_path}: {str(e)}")
+    return reports
 
 
 def create_rat_pending(
@@ -1195,6 +1353,63 @@ def delete_rat_pending(db_path: str, user_id: int) -> None:
             conn.commit()
     except Exception as e:
         logger.error(f"Error deleting rat pending action for user_id={user_id} in database at {db_path}: {str(e)}")
+
+
+def add_rat_investor(
+        db_path: str,
+        user_id: int,
+        display_name: str,
+        invested_at: datetime | None = None,
+) -> None:
+    logger.info(f"Adding rat investor user_id={user_id} in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_season2_tables(conn)
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO civil_war_rat_investors (user_id, display_name, invested_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    display_name = excluded.display_name,
+                    invested_at = excluded.invested_at
+                """,
+                (user_id, display_name, (invested_at or datetime.now()).isoformat()),
+            )
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error adding rat investor user_id={user_id} in database at {db_path}: {str(e)}")
+
+
+def get_rat_investors(db_path: str) -> list[tuple[int, str]]:
+    logger.info(f"Fetching rat investors from database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_season2_tables(conn)
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT user_id, display_name
+                FROM civil_war_rat_investors
+                ORDER BY invested_at, user_id
+                """
+            )
+            return [(int(row[0]), str(row[1])) for row in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"Error fetching rat investors from database at {db_path}: {str(e)}")
+        return []
+
+
+def clear_rat_investors(db_path: str) -> None:
+    logger.info(f"Clearing rat investors in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_season2_tables(conn)
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM civil_war_rat_investors")
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error clearing rat investors in database at {db_path}: {str(e)}")
 
 
 def get_command_last_used_at(db_path: str, command_name: str) -> datetime | None:

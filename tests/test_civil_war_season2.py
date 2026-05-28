@@ -142,6 +142,7 @@ class TestCivilWarSeason2(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(started)
         self.assertEqual(db.get_rat_pending(self.db_path, 1), (1, -100, 77))
+        self.assertIn('инвесторы будут получать по +1', context.bot.send_photo.await_args.kwargs['caption'])
 
     async def test_rat_take_sends_rat_asset_to_source_chat(self):
         db.create_rat_pending(self.db_path, 1, 4, source_chat_id=-100, source_message_thread_id=77)
@@ -165,6 +166,59 @@ class TestCivilWarSeason2(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('message_thread_id', context.bot.send_photo.await_args.kwargs)
         self.assertIn('@actor', context.bot.send_photo.await_args.kwargs['caption'])
         self.assertIn('+4', context.bot.send_photo.await_args.kwargs['caption'])
+
+    async def test_rat_invest_sends_investor_asset_and_records_investor(self):
+        db.create_rat_pending(self.db_path, 1, 3, source_chat_id=-100, source_message_thread_id=77)
+        update = self.build_update('2')
+        context = SimpleNamespace(bot=SimpleNamespace(send_photo=AsyncMock(), send_message=AsyncMock(), send_animation=AsyncMock()))
+
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            temp_file.write(b'test')
+            temp_path = Path(temp_file.name)
+
+        try:
+            with patch('handlers.civil_war_season2.os.getenv', side_effect=lambda name, default=None: self.db_path if name == 'DB_PATH' else default), \
+                    patch('handlers.civil_war_season2.get_rat_investor_image_path', return_value=temp_path):
+                handled = await process_season2_private_response(update, context)
+        finally:
+            temp_path.unlink()
+
+        self.assertTrue(handled)
+        self.assertEqual(db.get_rat_points(self.db_path), 5)
+        self.assertEqual(db.get_rat_investors(self.db_path), [(1, '@actor')])
+        context.bot.send_photo.assert_awaited_once()
+        self.assertEqual(context.bot.send_photo.await_args.kwargs['chat_id'], -100)
+        self.assertIn('@actor инвестировал', context.bot.send_photo.await_args.kwargs['caption'])
+
+    async def test_rat_take_resets_bank_and_records_steal_report(self):
+        db.add_rat_investor(self.db_path, 2, '@target_a')
+        db.add_rat_investor(self.db_path, 3, '@target_b')
+        db.add_rat_hustled_points(self.db_path, 6)
+        db.create_rat_pending(self.db_path, 1, 9, source_chat_id=-100, source_message_thread_id=77)
+        update = self.build_update('1')
+        context = SimpleNamespace(bot=SimpleNamespace(send_photo=AsyncMock(), send_message=AsyncMock(), send_animation=AsyncMock()))
+
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            temp_file.write(b'test')
+            temp_path = Path(temp_file.name)
+
+        try:
+            with patch('handlers.civil_war_season2.os.getenv', side_effect=lambda name, default=None: self.db_path if name == 'DB_PATH' else default), \
+                    patch('handlers.civil_war_season2.get_rat_image_path', return_value=temp_path):
+                handled = await process_season2_private_response(update, context)
+        finally:
+            temp_path.unlink()
+
+        self.assertTrue(handled)
+        self.assertEqual(db.get_civil_war_stats(self.db_path, 1), (1, 10))
+        self.assertEqual(db.get_civil_war_stats(self.db_path, 2), (1, 1))
+        self.assertEqual(db.get_civil_war_stats(self.db_path, 3), (1, 0))
+        self.assertEqual(db.get_rat_points(self.db_path), 1)
+        self.assertEqual(db.get_rat_hustled_points(self.db_path), 0)
+        self.assertEqual(db.get_rat_investors(self.db_path), [])
+        caption = context.bot.send_photo.await_args.kwargs['caption']
+        self.assertIn('@actor забрал крысиный банк: +9 винов', caption)
+        self.assertEqual(db.process_rat_steal_reports(self.db_path), [('@actor', 9, 6)])
 
 
 if __name__ == '__main__':

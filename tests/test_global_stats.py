@@ -24,8 +24,8 @@ telegram_ext_module.ContextTypes = DummyContextTypes
 sys.modules.setdefault('telegram', telegram_module)
 sys.modules.setdefault('telegram.ext', telegram_ext_module)
 
-from handlers.global_stats import can_bypass_stats_cooldown, format_global_stats_message, get_stats_cooldown, stats, \
-    register_stats_chat, format_mafia_daily_summary
+from handlers.global_stats import build_daily_stats_summary, can_bypass_stats_cooldown, format_global_stats_message, \
+    format_mafia_daily_summary, get_stats_cooldown, process_rat_daily_dividends, register_stats_chat, stats
 
 
 class TestGlobalStats(unittest.IsolatedAsyncioTestCase):
@@ -145,6 +145,30 @@ class TestGlobalStats(unittest.IsolatedAsyncioTestCase):
 
         self.assertIn('@target нежданули на -1 вин', message)
         self.assertNotIn('нежданул на', message)
+
+    def test_process_rat_daily_dividends_awards_investors_on_stats(self):
+        investor = create_user({'user_id': 1, 'name': 'Investor', 'tg_username': '@investor', 'birthday': '01.01.2000',
+                                'wishlist_url': 'https://example1.com', 'money_gifts': True, 'funny_gifts': True})
+        db.add_user(self.db_path, investor)
+        db.update_civil_war_stats(self.db_path, 1, True)
+        db.set_rat_points(self.db_path, 9)
+        db.add_rat_investor(self.db_path, 1, '@investor')
+
+        summary = process_rat_daily_dividends(self.db_path)
+
+        self.assertIn('@investor получили', summary)
+        self.assertEqual(db.get_civil_war_stats(self.db_path, 1), (1, 4))
+        self.assertEqual(db.get_rat_hustled_points(self.db_path), 3)
+
+    def test_build_daily_stats_summary_reports_stolen_rat_bank_once(self):
+        db.create_rat_steal_report(self.db_path, 1, '@rat', 9, 6)
+
+        first_summary = build_daily_stats_summary(self.db_path, [], [])
+        second_summary = build_daily_stats_summary(self.db_path, [], [])
+
+        self.assertIn('@rat скрысил банк на +9 винов', first_summary)
+        self.assertIn('Аутяги нахастлили 6, но крыса все испортила', first_summary)
+        self.assertNotIn('скрысил банк', second_summary)
 
     def test_format_global_stats_message_includes_low_sample_users(self):
         test_user = create_user({'user_id': 1, 'name': 'Test User', 'tg_username': '@test_user', 'birthday': '01.01.2000',

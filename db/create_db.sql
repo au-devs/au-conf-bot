@@ -72,6 +72,13 @@ CREATE TABLE IF NOT EXISTS civil_war_mafia_daily (
     FOREIGN KEY (target_user_id) REFERENCES users (user_id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS civil_war_mafia_protection_balance (
+    user_id INTEGER NOT NULL PRIMARY KEY,
+    protections INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS civil_war_rat_state (
     id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
     points INTEGER NOT NULL DEFAULT 1,

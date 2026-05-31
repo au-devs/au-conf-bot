@@ -139,6 +139,16 @@ def ensure_civil_war_season2_tables(conn: sqlite3.Connection) -> None:
     )
     cursor.execute(
         """
+        CREATE TABLE IF NOT EXISTS civil_war_mafia_protection_balance (
+            user_id INTEGER NOT NULL PRIMARY KEY,
+            protections INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
+        )
+        """
+    )
+    cursor.execute(
+        """
         CREATE TABLE IF NOT EXISTS civil_war_rat_state (
             id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
             points INTEGER NOT NULL DEFAULT 1,
@@ -1079,9 +1089,31 @@ def process_mafia_daily_actions(db_path: str, processed_at: datetime | None = No
                     actor_id = int(actor_user_id)
                     protections[actor_id] = protections.get(actor_id, 0) + 1
 
+            affected_user_ids = set(attacks) | set(protections)
+            protection_balances: dict[int, int] = {}
+            if affected_user_ids:
+                balance_placeholders = ", ".join("?" for _ in affected_user_ids)
+                cursor.execute(
+                    f"""
+                    SELECT user_id, protections
+                    FROM civil_war_mafia_protection_balance
+                    WHERE user_id IN ({balance_placeholders})
+                    """,
+                    tuple(affected_user_ids),
+                )
+                protection_balances = {
+                    int(user_id): max(int(protections_count), 0)
+                    for user_id, protections_count in cursor.fetchall()
+                }
+
+            for user_id, new_protections in protections.items():
+                protection_balances[user_id] = protection_balances.get(user_id, 0) + new_protections
+
             for target_user_id, attack_count in attacks.items():
-                protection_count = protections.get(target_user_id, 0)
-                damage = max(attack_count - protection_count, 0)
+                available_protections = protection_balances.get(target_user_id, 0)
+                used_protections = min(attack_count, available_protections)
+                damage = max(attack_count - used_protections, 0)
+                protection_balances[target_user_id] = available_protections - used_protections
                 cursor.execute(
                     """
                     SELECT COALESCE(users.tg_username, users.name, CAST(users.user_id AS TEXT))
@@ -1101,13 +1133,42 @@ def process_mafia_daily_actions(db_path: str, processed_at: datetime | None = No
                         """,
                         (target_user_id, damage),
                     )
-                    damaged.append((display_name, damage, attack_count, protection_count))
-                elif protection_count > 0:
-                    defended.append((display_name, attack_count, protection_count))
+                    damaged.append((display_name, damage, attack_count, used_protections))
+                elif used_protections > 0:
+                    defended.append((display_name, attack_count, used_protections))
+
+            for user_id in affected_user_ids:
+                cursor.execute(
+                    """
+                    INSERT INTO civil_war_mafia_protection_balance (user_id, protections, updated_at)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(user_id) DO UPDATE SET
+                        protections = excluded.protections,
+                        updated_at = excluded.updated_at
+                    """,
+                    (user_id, max(protection_balances.get(user_id, 0), 0), processed_time.isoformat()),
+                )
             conn.commit()
     except Exception as e:
         logger.error(f"Error processing mafia daily actions in database at {db_path}: {str(e)}")
     return damaged, defended
+
+
+def get_mafia_protection_balance(db_path: str, user_id: int) -> int:
+    logger.info(f"Fetching mafia protection balance for user_id={user_id} from database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_season2_tables(conn)
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT protections FROM civil_war_mafia_protection_balance WHERE user_id = ?",
+                (user_id,),
+            )
+            row = cursor.fetchone()
+            return 0 if row is None else max(int(row[0]), 0)
+    except Exception as e:
+        logger.error(f"Error fetching mafia protection balance for user_id={user_id} from database at {db_path}: {str(e)}")
+        return 0
 
 
 def get_rat_points(db_path: str) -> int:

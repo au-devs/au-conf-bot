@@ -24,7 +24,11 @@ logger = logging.getLogger(__name__)
 
 async def message_handler(update: Update, context: ContextTypes) -> None:
     chat = update.effective_chat
-    register_stats_chat(context, chat.id if chat is not None else None)
+    register_stats_chat(
+        context,
+        chat.id if chat is not None else None,
+        getattr(chat, "type", None) if chat is not None else None,
+    )
 
     if await process_admin_config_response(update, context):
         return

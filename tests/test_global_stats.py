@@ -39,10 +39,11 @@ class TestGlobalStats(unittest.IsolatedAsyncioTestCase):
     def test_register_stats_chat(self):
         context = SimpleNamespace(bot_data={})
 
-        register_stats_chat(context, 123)
-        register_stats_chat(context, 123)
+        register_stats_chat(context, -123, "group")
+        register_stats_chat(context, -123, "group")
+        register_stats_chat(context, 456, "private")
 
-        self.assertEqual(context.bot_data['stats_chat_ids'], {123})
+        self.assertEqual(context.bot_data['stats_chat_ids'], {-123})
 
     def test_stats_cooldown_uses_env_or_default(self):
         with patch('handlers.global_stats.os.getenv', return_value=None):

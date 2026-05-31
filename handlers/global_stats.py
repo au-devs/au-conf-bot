@@ -43,8 +43,8 @@ def get_stats_cooldown() -> datetime.timedelta:
     return datetime.timedelta(hours=get_env_float("STATS_COOLDOWN_HOURS", DEFAULT_STATS_COOLDOWN_HOURS))
 
 
-def register_stats_chat(context: ContextTypes.DEFAULT_TYPE, chat_id: int | None) -> None:
-    if chat_id is None:
+def register_stats_chat(context: ContextTypes.DEFAULT_TYPE, chat_id: int | None, chat_type: str | None = None) -> None:
+    if chat_id is None or chat_type == "private":
         return
     chat_ids = context.bot_data.setdefault(STATS_CHAT_IDS_KEY, set())
     chat_ids.add(chat_id)
@@ -231,7 +231,11 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if message is None:
         return
 
-    register_stats_chat(context, chat.id if chat is not None else None)
+    register_stats_chat(
+        context,
+        chat.id if chat is not None else None,
+        getattr(chat, "type", None) if chat is not None else None,
+    )
     if not await can_bypass_stats_cooldown(update, context):
         await message.reply_text("/stats во втором сезоне может вызвать только админ.")
         return
@@ -258,7 +262,8 @@ async def send_daily_stats(context: ContextTypes.DEFAULT_TYPE) -> None:
     damaged, defended = process_mafia_daily_actions(db_path)
     extra_summary = build_daily_stats_summary(db_path, damaged, defended)
     message = format_global_stats_message(db_path, extra_summary)
-    chat_ids = sorted(context.bot_data.get(STATS_CHAT_IDS_KEY, set()))
+    chat_ids = sorted(chat_id for chat_id in context.bot_data.get(STATS_CHAT_IDS_KEY, set()) if chat_id < 0)
+    context.bot_data[STATS_CHAT_IDS_KEY] = set(chat_ids)
     if not chat_ids:
         logger.info("No chats registered for daily stats")
         return

@@ -105,6 +105,8 @@ class TestCivilWarSeason2(unittest.IsolatedAsyncioTestCase):
         bot.send_message.assert_not_awaited()
 
     async def test_start_mafia_event_sends_choice_photo(self):
+        db.set_rat_points(self.db_path, 13)
+        db.create_rat_pending(self.db_path, 1, 13, source_chat_id=-100)
         update = self.build_update('/start')
         context = SimpleNamespace(bot=SimpleNamespace(send_photo=AsyncMock(), send_message=AsyncMock(), send_animation=AsyncMock()))
 
@@ -119,10 +121,12 @@ class TestCivilWarSeason2(unittest.IsolatedAsyncioTestCase):
             temp_path.unlink()
 
         self.assertTrue(started)
+        self.assertIsNone(db.get_rat_pending(self.db_path, 1))
         context.bot.send_photo.assert_awaited_once()
         self.assertIn('мафиозный выбор', context.bot.send_photo.await_args.kwargs['caption'])
 
     async def test_start_rat_event_stores_source_chat(self):
+        db.create_mafia_pending(self.db_path, 1)
         update = SimpleNamespace(
             effective_chat=SimpleNamespace(id=-100, type='supergroup'),
             effective_user=SimpleNamespace(id=1),
@@ -141,10 +145,12 @@ class TestCivilWarSeason2(unittest.IsolatedAsyncioTestCase):
             temp_path.unlink()
 
         self.assertTrue(started)
+        self.assertIsNone(db.get_mafia_pending_state(self.db_path, 1))
         self.assertEqual(db.get_rat_pending(self.db_path, 1), (1, -100, 77))
         self.assertIn('инвесторы будут получать по +1', context.bot.send_photo.await_args.kwargs['caption'])
 
     async def test_rat_take_sends_rat_asset_to_source_chat(self):
+        db.set_rat_points(self.db_path, 4)
         db.create_rat_pending(self.db_path, 1, 4, source_chat_id=-100, source_message_thread_id=77)
         update = self.build_update('1')
         context = SimpleNamespace(bot=SimpleNamespace(send_photo=AsyncMock(), send_message=AsyncMock(), send_animation=AsyncMock()))
@@ -168,6 +174,7 @@ class TestCivilWarSeason2(unittest.IsolatedAsyncioTestCase):
         self.assertIn('+4', context.bot.send_photo.await_args.kwargs['caption'])
 
     async def test_rat_invest_sends_investor_asset_and_records_investor(self):
+        db.set_rat_points(self.db_path, 3)
         db.create_rat_pending(self.db_path, 1, 3, source_chat_id=-100, source_message_thread_id=77)
         update = self.build_update('2')
         context = SimpleNamespace(bot=SimpleNamespace(send_photo=AsyncMock(), send_message=AsyncMock(), send_animation=AsyncMock()))
@@ -194,6 +201,7 @@ class TestCivilWarSeason2(unittest.IsolatedAsyncioTestCase):
         db.add_rat_investor(self.db_path, 2, '@target_a')
         db.add_rat_investor(self.db_path, 3, '@target_b')
         db.add_rat_hustled_points(self.db_path, 6)
+        db.set_rat_points(self.db_path, 9)
         db.create_rat_pending(self.db_path, 1, 9, source_chat_id=-100, source_message_thread_id=77)
         update = self.build_update('1')
         context = SimpleNamespace(bot=SimpleNamespace(send_photo=AsyncMock(), send_message=AsyncMock(), send_animation=AsyncMock()))
@@ -219,6 +227,49 @@ class TestCivilWarSeason2(unittest.IsolatedAsyncioTestCase):
         caption = context.bot.send_photo.await_args.kwargs['caption']
         self.assertIn('@actor забрал крысиный банк: +9 винов', caption)
         self.assertEqual(db.process_rat_steal_reports(self.db_path), [('@actor', 9, 6)])
+
+    async def test_stale_rat_pending_cannot_take_already_stolen_bank(self):
+        db.set_rat_points(self.db_path, 13)
+        db.create_rat_pending(self.db_path, 1, 13, source_chat_id=-100)
+        db.set_rat_points(self.db_path, 1)
+        db.set_rat_points(self.db_path, 13)
+        update = self.build_update('1')
+        context = SimpleNamespace(bot=SimpleNamespace(send_photo=AsyncMock(), send_message=AsyncMock(), send_animation=AsyncMock()))
+
+        with patch('handlers.civil_war_season2.os.getenv', side_effect=lambda name, default=None: self.db_path if name == 'DB_PATH' else default):
+            handled = await process_season2_private_response(update, context)
+
+        self.assertTrue(handled)
+        self.assertEqual(db.get_civil_war_stats(self.db_path, 1), (1, 1))
+        self.assertIsNone(db.get_rat_pending(self.db_path, 1))
+        update.effective_message.reply_text.assert_awaited_once_with(
+            "Это предложение уже устарело: крысиный банк изменился."
+        )
+        context.bot.send_photo.assert_not_awaited()
+
+    async def test_new_mafia_event_replaces_old_rat_choice(self):
+        db.set_rat_points(self.db_path, 13)
+        db.create_rat_pending(self.db_path, 1, 13, source_chat_id=-100)
+        update = self.build_update('/start')
+        context = SimpleNamespace(bot=SimpleNamespace(send_photo=AsyncMock(), send_message=AsyncMock(), send_animation=AsyncMock()))
+
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            temp_file.write(b'test')
+            temp_path = Path(temp_file.name)
+        try:
+            with patch('handlers.civil_war_season2.get_mafia_image_path', return_value=temp_path):
+                await start_mafia_event(update, context, self.db_path)
+        finally:
+            temp_path.unlink()
+
+        choice_update = self.build_update('1')
+        with patch('handlers.civil_war_season2.os.getenv', side_effect=lambda name, default=None: self.db_path if name == 'DB_PATH' else default):
+            handled = await process_season2_private_response(choice_update, context)
+
+        self.assertTrue(handled)
+        self.assertEqual(db.get_mafia_pending_state(self.db_path, 1), 'target')
+        self.assertIsNone(db.get_rat_pending(self.db_path, 1))
+        self.assertEqual(db.get_civil_war_stats(self.db_path, 1), (1, 1))
 
 
 if __name__ == '__main__':

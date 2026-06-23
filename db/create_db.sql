@@ -83,12 +83,14 @@ CREATE TABLE IF NOT EXISTS civil_war_rat_state (
     id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
     points INTEGER NOT NULL DEFAULT 1,
     hustled_points INTEGER NOT NULL DEFAULT 0,
+    generation INTEGER NOT NULL DEFAULT 0,
     updated_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS civil_war_rat_pending (
     user_id INTEGER NOT NULL PRIMARY KEY,
     points INTEGER NOT NULL,
+    bank_generation INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     source_chat_id INTEGER NULL,
     source_message_thread_id INTEGER NULL,

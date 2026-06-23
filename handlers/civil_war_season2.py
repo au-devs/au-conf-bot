@@ -6,9 +6,10 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from db.database import add_mafia_daily_action, add_rat_investor, adjust_civil_war_successes, clear_rat_investors, \
-    create_mafia_pending, create_rat_pending, create_rat_steal_report, delete_mafia_pending, delete_rat_pending, \
+    consume_rat_pending, create_mafia_pending, create_rat_pending, create_rat_steal_report, delete_mafia_pending, delete_rat_pending, \
     find_verified_civil_war_user, get_civil_war_leaderboard, get_mafia_pending_state, get_rat_hustled_points, \
-    get_rat_pending, get_rat_points, reset_rat_hustled_points, set_mafia_pending_state, set_rat_points
+    get_rat_pending, get_rat_state, keep_latest_season2_pending, reset_rat_hustled_points, \
+    set_mafia_pending_state, set_rat_points
 from handlers.assets import resolve_asset_path, send_asset
 
 
@@ -143,6 +144,7 @@ async def start_mafia_event(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     user = update.effective_user
     if user is None:
         return False
+    delete_rat_pending(db_path, user.id)
     create_mafia_pending(db_path, user.id)
     try:
         await send_private_choice(
@@ -165,12 +167,14 @@ async def start_rat_event(update: Update, context: ContextTypes.DEFAULT_TYPE, db
     user = update.effective_user
     if user is None:
         return False
-    points = get_rat_points(db_path)
+    delete_mafia_pending(db_path, user.id)
+    points, bank_generation = get_rat_state(db_path)
     source_chat_id, source_message_thread_id = get_source_chat_kwargs(update)
     create_rat_pending(
         db_path,
         user.id,
         points,
+        bank_generation=bank_generation,
         source_chat_id=source_chat_id,
         source_message_thread_id=source_message_thread_id,
     )
@@ -201,28 +205,36 @@ async def process_season2_private_response(update: Update, context: ContextTypes
 
     text = (message.text or "").strip()
     db_path = os.getenv("DB_PATH")
+    keep_latest_season2_pending(db_path, user.id)
 
     rat_pending = get_rat_pending(db_path, user.id)
     if rat_pending is not None:
-        rat_points, source_chat_id, source_message_thread_id = rat_pending
         if text == "1":
+            consumed_pending = consume_rat_pending(db_path, user.id)
+            if consumed_pending is None:
+                await message.reply_text("Это предложение уже устарело: крысиный банк изменился.")
+                return True
+            rat_points, source_chat_id, source_message_thread_id = consumed_pending
             display_name = get_user_display_name(user)
             adjust_civil_war_successes(db_path, user.id, rat_points)
             create_rat_steal_report(db_path, user.id, display_name, rat_points, get_rat_hustled_points(db_path))
             set_rat_points(db_path, 1)
             reset_rat_hustled_points(db_path)
             clear_rat_investors(db_path)
-            delete_rat_pending(db_path, user.id)
             image_path = get_rat_image_path()
             caption = f"{display_name} {get_rat_caption_template().format(points=rat_points)}"
             await send_to_source_chat(context.bot, image_path, source_chat_id, caption, user.id)
             return True
         if text == "2":
+            consumed_pending = consume_rat_pending(db_path, user.id)
+            if consumed_pending is None:
+                await message.reply_text("Это предложение уже устарело: крысиный банк изменился.")
+                return True
+            rat_points, source_chat_id, source_message_thread_id = consumed_pending
             new_points = rat_points + get_rat_bank_pass_increment()
             set_rat_points(db_path, new_points)
             display_name = get_user_display_name(user)
             add_rat_investor(db_path, user.id, display_name)
-            delete_rat_pending(db_path, user.id)
             caption = get_rat_investor_caption_template().format(username=display_name, points=new_points)
             await send_to_source_chat(context.bot, get_rat_investor_image_path(), source_chat_id, caption, user.id)
             return True

@@ -153,6 +153,7 @@ def ensure_civil_war_season2_tables(conn: sqlite3.Connection) -> None:
             id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
             points INTEGER NOT NULL DEFAULT 1,
             hustled_points INTEGER NOT NULL DEFAULT 0,
+            generation INTEGER NOT NULL DEFAULT 0,
             updated_at TEXT NOT NULL
         )
         """
@@ -161,11 +162,14 @@ def ensure_civil_war_season2_tables(conn: sqlite3.Connection) -> None:
     rat_state_columns = {row[1] for row in cursor.fetchall()}
     if 'hustled_points' not in rat_state_columns:
         cursor.execute("ALTER TABLE civil_war_rat_state ADD COLUMN hustled_points INTEGER NOT NULL DEFAULT 0")
+    if 'generation' not in rat_state_columns:
+        cursor.execute("ALTER TABLE civil_war_rat_state ADD COLUMN generation INTEGER NOT NULL DEFAULT 0")
     cursor.execute(
         """
         CREATE TABLE IF NOT EXISTS civil_war_rat_pending (
             user_id INTEGER NOT NULL PRIMARY KEY,
             points INTEGER NOT NULL,
+            bank_generation INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL,
             source_chat_id INTEGER NULL,
             source_message_thread_id INTEGER NULL,
@@ -193,6 +197,8 @@ def ensure_civil_war_season2_tables(conn: sqlite3.Connection) -> None:
         cursor.execute("ALTER TABLE civil_war_rat_pending ADD COLUMN source_chat_id INTEGER NULL")
     if 'source_message_thread_id' not in columns:
         cursor.execute("ALTER TABLE civil_war_rat_pending ADD COLUMN source_message_thread_id INTEGER NULL")
+    if 'bank_generation' not in columns:
+        cursor.execute("ALTER TABLE civil_war_rat_pending ADD COLUMN bank_generation INTEGER NOT NULL DEFAULT 0")
     cursor.execute(
         """
         CREATE TABLE IF NOT EXISTS civil_war_rat_investors (
@@ -988,6 +994,42 @@ def delete_mafia_pending(db_path: str, user_id: int) -> None:
         logger.error(f"Error deleting mafia pending action for user_id={user_id} in database at {db_path}: {str(e)}")
 
 
+def keep_latest_season2_pending(db_path: str, user_id: int) -> str | None:
+    logger.info(f"Resolving latest season 2 pending action for user_id={user_id} in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_season2_tables(conn)
+            cursor = conn.cursor()
+            cursor.execute("BEGIN IMMEDIATE")
+            cursor.execute(
+                """
+                SELECT pending_type
+                FROM (
+                    SELECT 'mafia' AS pending_type, created_at FROM civil_war_mafia_pending WHERE user_id = ?
+                    UNION ALL
+                    SELECT 'rat' AS pending_type, created_at FROM civil_war_rat_pending WHERE user_id = ?
+                )
+                ORDER BY created_at DESC, pending_type
+                LIMIT 1
+                """,
+                (user_id, user_id),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                conn.commit()
+                return None
+            pending_type = str(row[0])
+            if pending_type == 'mafia':
+                cursor.execute("DELETE FROM civil_war_rat_pending WHERE user_id = ?", (user_id,))
+            else:
+                cursor.execute("DELETE FROM civil_war_mafia_pending WHERE user_id = ?", (user_id,))
+            conn.commit()
+            return pending_type
+    except Exception as e:
+        logger.error(f"Error resolving latest season 2 pending action for user_id={user_id} in database at {db_path}: {str(e)}")
+        return None
+
+
 def add_mafia_daily_action(
         db_path: str,
         actor_user_id: int,
@@ -1185,6 +1227,22 @@ def get_rat_points(db_path: str) -> int:
         return 1
 
 
+def get_rat_state(db_path: str) -> tuple[int, int]:
+    logger.info(f"Fetching rat state from database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_season2_tables(conn)
+            cursor = conn.cursor()
+            cursor.execute("SELECT points, generation FROM civil_war_rat_state WHERE id = 1")
+            row = cursor.fetchone()
+            if row is None:
+                return 1, 0
+            return max(int(row[0]), 1), max(int(row[1]), 0)
+    except Exception as e:
+        logger.error(f"Error fetching rat state from database at {db_path}: {str(e)}")
+        return 1, 0
+
+
 def get_rat_hustled_points(db_path: str) -> int:
     logger.info(f"Fetching rat hustled points from database at {db_path}")
     try:
@@ -1207,9 +1265,12 @@ def set_rat_points(db_path: str, points: int, updated_at: datetime | None = None
             cursor = conn.cursor()
             cursor.execute(
                 """
-                INSERT INTO civil_war_rat_state (id, points, updated_at)
-                VALUES (1, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET points = excluded.points, updated_at = excluded.updated_at
+                INSERT INTO civil_war_rat_state (id, points, generation, updated_at)
+                VALUES (1, ?, 1, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    points = excluded.points,
+                    generation = generation + 1,
+                    updated_at = excluded.updated_at
                 """,
                 (max(int(points), 1), (updated_at or datetime.now()).isoformat()),
             )
@@ -1337,6 +1398,7 @@ def create_rat_pending(
         db_path: str,
         user_id: int,
         points: int,
+        bank_generation: int | None = None,
         created_at: datetime | None = None,
         source_chat_id: int | None = None,
         source_message_thread_id: int | None = None,
@@ -1346,14 +1408,19 @@ def create_rat_pending(
         with sqlite3.connect(db_path) as conn:
             ensure_civil_war_season2_tables(conn)
             cursor = conn.cursor()
+            if bank_generation is None:
+                cursor.execute("SELECT generation FROM civil_war_rat_state WHERE id = 1")
+                state_row = cursor.fetchone()
+                bank_generation = 0 if state_row is None else max(int(state_row[0]), 0)
             cursor.execute(
                 """
                 INSERT INTO civil_war_rat_pending (
-                    user_id, points, created_at, source_chat_id, source_message_thread_id
+                    user_id, points, bank_generation, created_at, source_chat_id, source_message_thread_id
                 )
-                VALUES (?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(user_id) DO UPDATE SET
                     points = excluded.points,
+                    bank_generation = excluded.bank_generation,
                     created_at = excluded.created_at,
                     source_chat_id = excluded.source_chat_id,
                     source_message_thread_id = excluded.source_message_thread_id
@@ -1361,6 +1428,7 @@ def create_rat_pending(
                 (
                     user_id,
                     max(int(points), 1),
+                    max(int(bank_generation), 0),
                     (created_at or datetime.now()).isoformat(),
                     source_chat_id,
                     source_message_thread_id,
@@ -1402,6 +1470,58 @@ def get_rat_pending_points(db_path: str, user_id: int) -> int | None:
     logger.info(f"Fetching rat pending action for user_id={user_id} in database at {db_path}")
     pending = get_rat_pending(db_path, user_id)
     return None if pending is None else pending[0]
+
+
+def consume_rat_pending(db_path: str, user_id: int) -> tuple[int, int | None, int | None] | None:
+    logger.info(f"Consuming rat pending action for user_id={user_id} in database at {db_path}")
+    try:
+        with sqlite3.connect(db_path) as conn:
+            ensure_civil_war_season2_tables(conn)
+            cursor = conn.cursor()
+            cursor.execute("BEGIN IMMEDIATE")
+            cursor.execute(
+                """
+                SELECT points, bank_generation, source_chat_id, source_message_thread_id
+                FROM civil_war_rat_pending
+                WHERE user_id = ?
+                """,
+                (user_id,),
+            )
+            pending = cursor.fetchone()
+            if pending is None:
+                conn.commit()
+                return None
+
+            cursor.execute("SELECT points, generation FROM civil_war_rat_state WHERE id = 1")
+            state = cursor.fetchone()
+            current_points, current_generation = (1, 0) if state is None else (max(int(state[0]), 1), max(int(state[1]), 0))
+            pending_points = max(int(pending[0]), 1)
+            pending_generation = max(int(pending[1]), 0)
+            is_current = pending_points == current_points and pending_generation == current_generation
+            cursor.execute("DELETE FROM civil_war_rat_pending WHERE user_id = ?", (user_id,))
+            if is_current:
+                cursor.execute(
+                    """
+                    INSERT INTO civil_war_rat_state (id, points, generation, updated_at)
+                    VALUES (1, ?, 1, ?)
+                    ON CONFLICT(id) DO UPDATE SET
+                        generation = generation + 1,
+                        updated_at = excluded.updated_at
+                    """,
+                    (current_points, datetime.now().isoformat()),
+                )
+            conn.commit()
+
+            if not is_current:
+                return None
+            return (
+                pending_points,
+                None if pending[2] is None else int(pending[2]),
+                None if pending[3] is None else int(pending[3]),
+            )
+    except Exception as e:
+        logger.error(f"Error consuming rat pending action for user_id={user_id} in database at {db_path}: {str(e)}")
+        return None
 
 
 def delete_rat_pending(db_path: str, user_id: int) -> None:

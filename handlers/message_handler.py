@@ -8,7 +8,6 @@ from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import ContextTypes
 from db.database import get_db_users, update_username
-from handlers.birthday_reminders import process_birthday_reminders
 from handlers.civil_war_admin_config import process_admin_config_response
 from handlers.civil_war import civil_war, civil_war_stats, is_civil_war_trigger, is_civil_war_stats_trigger
 from handlers.civil_war_season2 import process_season2_private_response
@@ -53,8 +52,6 @@ async def message_handler(update: Update, context: ContextTypes) -> None:
     elif (context.user_data.get('state') == 'USER_INFO_EDIT' and update.message.chat.id ==
           context.user_data.get('quiz_chat_id')):
         await edit_user_data(update, context)
-
-    await process_birthday_reminders(update, context)
 
 
 async def username_updater(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

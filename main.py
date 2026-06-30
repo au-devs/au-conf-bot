@@ -9,6 +9,7 @@ from handlers.new_database import new_database
 from handlers.message_handler import message_handler, username_updater
 from handlers.get_users import get_users
 from handlers.add_user import add_user
+from handlers.birthday_reminders import send_daily_birthday_reminders
 from handlers.civil_war_admin_config import civil_war_config, help_admin
 from handlers.civil_war_admin_events import test_civil_war_fail, test_civil_war_mafia, test_civil_war_rare, \
     test_civil_war_rare_fail, test_civil_war_rat, test_civil_war_rat_choice, test_civil_war_win
@@ -92,6 +93,11 @@ def main() -> None:
             send_daily_stats,
             time=datetime.time(hour=6, minute=0, tzinfo=datetime.timezone.utc),
             name="daily_stats",
+        )
+        application.job_queue.run_daily(
+            send_daily_birthday_reminders,
+            time=datetime.time(hour=6, minute=1, tzinfo=datetime.timezone.utc),
+            name="daily_birthday_reminders",
         )
     # Add message handlers. We explicitly exclude command updates from the generic
     # message_handler, otherwise the command message itself (e.g. "/start") would be

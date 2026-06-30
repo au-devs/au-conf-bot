@@ -54,6 +54,12 @@ Daily stats schedule:
 11:00 Asia/Yekaterinburg
 ```
 
+Daily birthday reminders schedule:
+```bash
+06:01 UTC
+11:01 Asia/Yekaterinburg
+```
+
 How to run:
 ```bash
 python3 -m pip install -r requirements.txt

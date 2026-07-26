@@ -4,6 +4,11 @@ import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
+from handlers.birthday_reminders import (
+    get_last_birthday_run,
+    register_birthday_chat,
+    send_daily_birthday_reminders,
+)
 from handlers.start_handler import start
 from handlers.new_database import new_database
 from handlers.message_handler import message_handler, username_updater
@@ -15,7 +20,7 @@ from handlers.civil_war_admin_events import test_civil_war_fail, test_civil_war_
 from handlers.civil_war import civil_war, civil_war_stats, get_assets_dir
 from handlers.civil_war_seasons import civil_war_season_stats, civil_war_seasons, save_civil_war_season, \
     start_civil_war_season
-from handlers.global_stats import send_daily_stats, stats
+from handlers.global_stats import register_stats_chat, send_daily_stats, stats
 from handlers.remove_user import remove_user_handler
 from handlers.user_info import user_info
 from handlers.edit_user_info import edit_info
@@ -37,6 +42,21 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
+async def _register_group_birthday_chat(update: Update, context) -> None:
+    """Passthrough handler (group=0) that ensures every group/supergroup update —
+    including command-only chats — populates the birthday broadcast registry.
+
+    Without this, a group that never sends plain text messages (only /commands)
+    would never end up in birthday_chat_ids and would miss reminders.
+    """
+    chat = update.effective_chat
+    register_birthday_chat(
+        context,
+        chat.id if chat is not None else None,
+        getattr(chat, "type", None) if chat is not None else None,
+    )
+
+
 async def post_init(application: Application) -> None:
     await application.bot.set_my_commands(
         [BotCommand("start", "Начало квиза"),
@@ -50,6 +70,19 @@ async def post_init(application: Application) -> None:
          BotCommand("remove_user", "[ADMIN]  Удаление пользователя")]
     )
 
+    # Catch-up: if the birthday job didn't run today (e.g. the container was
+    # down at 06:01 UTC), schedule an immediate one-shot run.  This ensures a
+    # restart later in the day doesn't silently drop birthday greetings.
+    db_path = os.getenv('DB_PATH')
+    if db_path and application.job_queue is not None:
+        if get_last_birthday_run(db_path) != datetime.date.today():
+            logger.info("Birthday reminders not yet run today — scheduling catch-up job.")
+            application.job_queue.run_once(
+                send_daily_birthday_reminders,
+                when=datetime.timedelta(seconds=5),
+                name="birthday_reminders_catchup",
+            )
+
 
 def main() -> None:
     # Create the Application
@@ -60,6 +93,13 @@ def main() -> None:
     except ValueError:
         logger.error("TELEGRAM_BOT_TOKEN is not set")
         exit(1)
+
+    # group=0: runs before all other handlers for every GROUP update so that
+    # command-only chats are registered in the birthday broadcast registry.
+    application.add_handler(
+        MessageHandler(filters.ChatType.GROUP, _register_group_birthday_chat),
+        group=0,
+    )
 
     # Add command handlers
     application.add_handler(CommandHandler("start", start))
@@ -86,12 +126,20 @@ def main() -> None:
     application.add_handler(CommandHandler("test_civil_war_rat", test_civil_war_rat))
     application.add_handler(CommandHandler("help_admin", help_admin))
     if application.job_queue is None:
-        logger.error("JobQueue is not available. Install python-telegram-bot[job-queue] to enable daily stats.")
+        logger.error(
+            "JobQueue is not available. Install python-telegram-bot[job-queue] "
+            "to enable daily stats and birthday reminders."
+        )
     else:
         application.job_queue.run_daily(
             send_daily_stats,
             time=datetime.time(hour=6, minute=0, tzinfo=datetime.timezone.utc),
             name="daily_stats",
+        )
+        application.job_queue.run_daily(
+            send_daily_birthday_reminders,
+            time=datetime.time(hour=6, minute=1, tzinfo=datetime.timezone.utc),
+            name="daily_birthday_reminders",
         )
     # Add message handlers. We explicitly exclude command updates from the generic
     # message_handler, otherwise the command message itself (e.g. "/start") would be
